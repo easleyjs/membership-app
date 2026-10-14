@@ -4,6 +4,7 @@ import com.example.adminportal.dto.AppUserCreateRequest;
 import com.example.adminportal.dto.AppUserResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.Member;
+import com.example.adminportal.exception.MemberAlreadyHasUserException;
 import com.example.adminportal.repository.MemberRepository;
 import com.example.adminportal.repository.AppUserRepository;
 import org.springframework.stereotype.Service;
@@ -43,7 +44,7 @@ public class AppUserService {
                         new MemberNotFoundException(request.memberId()));
                 */
         if (appUserRepo.existsByMember_Id((member.getId()))) {
-            //throw new AppUserAlreadyExistsException(member.getId());
+            throw new MemberAlreadyHasUserException("App user exists for member: " + member.getId());
         }
 
         AppUser appUser = new AppUser(
