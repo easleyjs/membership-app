@@ -7,7 +7,7 @@ public record MemberResponse(
         String firstName,
         String lastName,
         String email,
-        int memberNumber,
+        Long memberNumber,
         MemberStatus status
 ) {
     public static MemberResponse from(Member member) {
