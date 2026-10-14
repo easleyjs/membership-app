@@ -48,6 +48,21 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(MemberNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleAppUserNotFound(
+            MemberNotFoundException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        "APP_USER_NOT_FOUND",
+                        ex.getMessage(),
+                        List.of(),
+                        "",
+                        Instant.now()
+                ));
+    }
+
     @ExceptionHandler(MemberAlreadyHasUserException.class)
     public ResponseEntity<ApiErrorResponse> handleMemberAlreadyHasUser(
             MemberAlreadyHasUserException ex
