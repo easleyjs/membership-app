@@ -48,9 +48,9 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(MemberNotFoundException.class)
+    @ExceptionHandler(AppUserNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleAppUserNotFound(
-            MemberNotFoundException ex
+            AppUserNotFoundException ex
     ) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
