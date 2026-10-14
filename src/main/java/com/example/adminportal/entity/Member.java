@@ -28,10 +28,6 @@ public class Member {
     @Column(nullable = false, unique = true, updatable = false)
     private Long memberNumber;
 
-    private Long wooCustomerId;
-
-    private Long wooSubscriptionId;
-
     @Column(nullable = false, unique = true)
     private String qrToken;
 
