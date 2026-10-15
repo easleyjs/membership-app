@@ -2,12 +2,16 @@ package com.example.adminportal.repository;
 
 import com.example.adminportal.entity.Member;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public interface MemberRepository extends JpaRepository<Member, Long> {
-    public Member findMemberById(Long id);
+public interface MemberRepository extends JpaRepository<Member, UUID> {
+    @Query(value = "SELECT NEXT VALUE FOR member_number_seq", nativeQuery = true)
+    Long getNextMemberNumber();
 
-    public Member findMemberByMemberId(UUID uuid);
+    Optional<Member> findByMemberNumber(Long memberNumber);
+    public Member findMemberByEmailContainsIgnoreCase(String email);
 }

@@ -4,6 +4,9 @@ import com.example.adminportal.dto.AppUserCreateRequest;
 import com.example.adminportal.dto.AppUserResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.Member;
+import com.example.adminportal.exception.AppUserNotFoundException;
+import com.example.adminportal.exception.MemberAlreadyHasUserException;
+import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.MemberRepository;
 import com.example.adminportal.repository.AppUserRepository;
 import org.springframework.stereotype.Service;
@@ -32,18 +35,21 @@ public class AppUserService {
     }
 
     public AppUserResponse findAppUserById(UUID id) {
-        return AppUserResponse.from(appUserRepo.findById(id));
+        AppUser user = appUserRepo.findById(id)
+                .orElseThrow(() ->
+                        new AppUserNotFoundException("App user not found: " + id));
+
+        return AppUserResponse.from(user);
     }
 
     public AppUser createUser(AppUserCreateRequest request) {
 
-        Member member = memberRepo.findMemberByMemberId(request.memberId());
-                /*
+        Member member = memberRepo.findById(request.memberId())
                 .orElseThrow(() ->
-                        new MemberNotFoundException(request.memberId()));
-                */
+                        new MemberNotFoundException("Member: " + request.memberId() + " not found."));
+
         if (appUserRepo.existsByMember_Id((member.getId()))) {
-            //throw new AppUserAlreadyExistsException(member.getId());
+            throw new MemberAlreadyHasUserException("App user exists for member: " + member.getId());
         }
 
         AppUser appUser = new AppUser(

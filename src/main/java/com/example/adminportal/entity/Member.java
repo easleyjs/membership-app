@@ -28,10 +28,6 @@ public class Member {
     @Column(nullable = false, unique = true, updatable = false)
     private Long memberNumber;
 
-    private Long wooCustomerId;
-
-    private Long wooSubscriptionId;
-
     @Column(nullable = false, unique = true)
     private String qrToken;
 
@@ -53,19 +49,6 @@ public class Member {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
-
-    // Remove after testing/deployment
-    public Member(
-            String firstName,
-            String lastName,
-            String email
-    ) {
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.email = email;
-        this.memberNumber = (long) (Math.random() * 10);
-        this.qrToken = UUID.randomUUID().toString();
-    }
 
     public Member(
             String firstName,
