@@ -1,13 +1,16 @@
 package com.example.adminportal.entity;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Getter
+@Setter
 public class CheckIn {
-
     //Check-In IDs will be generated in the client to facilitate offline access.
     @Id
     UUID id;
