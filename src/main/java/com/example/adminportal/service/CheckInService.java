@@ -41,9 +41,11 @@ public class CheckInService {
     //Perform a check-in
     @Transactional
     public CheckInResponse createCheckIn(
-            CheckInCreateRequest request,
-            UUID checkedInById
+            CheckInCreateRequest request
     ) {
+            UUID staffId = request.staffMemberId();
+        
+        
         // Allow an offline client to retry the same check-in.
         CheckIn existing = checkInRepository.findById(request.id())
                 .orElse(null);
@@ -51,7 +53,7 @@ public class CheckInService {
         if (existing != null) {
             boolean sameCheckIn =
                     existing.getMember().getId().equals(request.memberId())
-                            && existing.getCheckedInBy().getId().equals(checkedInById)
+                            && existing.getCheckedInBy().getId().equals(staffId)
                             && existing.getMethod() == request.method();
 
             if (!sameCheckIn) {
@@ -69,9 +71,9 @@ public class CheckInService {
                         "Member not found: " + request.memberId()
                 ));
 
-        AppUser staff = appUserRepository.findById(checkedInById)
+        AppUser staff = appUserRepository.findById(staffId)
                 .orElseThrow(() -> new AppUserNotFoundException(
-                        "App user not found: " + checkedInById
+                        "App user not found: " + staffId
                 ));
 
         CheckIn checkIn = new CheckIn();
