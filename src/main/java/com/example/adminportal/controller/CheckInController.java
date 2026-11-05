@@ -33,8 +33,13 @@ public class CheckInController {
     }
 
     @GetMapping("/{id}")
-    public List<CheckInResponse> findAll(@PathVariable UUID id) {
+    public List<CheckInResponse> findAllByMemberId(@PathVariable UUID id) {
         return checkInService.getCheckInsByMember(id);
+    }
+
+    @GetMapping("")
+    public List<CheckInResponse> findAll() {
+        return checkInService.getAllCheckIns();
     }
 
 }

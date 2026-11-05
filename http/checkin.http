@@ -1,16 +1,12 @@
-### Get all members
+### Get all check-ins
 
-GET http://localhost:8080/api/members
+GET http://localhost:8080/api/checkin
 Accept: application/json
 
-### Get one member
+### Get check-ins by User ID
 
 GET http://localhost:8080/api/checkin/{{testAdminId}}
 Accept: application/json
-
-### Create a check-in
-POST http://localhost:8080/api/members
-Content-Type: application/json
 
 ### Create a check-in
 POST http://localhost:8080/api/checkin

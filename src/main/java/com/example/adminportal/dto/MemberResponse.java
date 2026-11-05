@@ -3,7 +3,10 @@ package com.example.adminportal.dto;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.entity.MemberStatus;
 
+import java.util.UUID;
+
 public record MemberResponse(
+        UUID id,
         String firstName,
         String lastName,
         String email,
@@ -12,6 +15,7 @@ public record MemberResponse(
 ) {
     public static MemberResponse from(Member member) {
         return new MemberResponse(
+                member.getId(),
                 member.getFirstName(),
                 member.getLastName(),
                 member.getEmail(),

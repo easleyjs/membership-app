@@ -98,6 +98,13 @@ public class CheckInService {
                 .toList();
     }
 
+    public List<CheckInResponse> getAllCheckIns() {
+        return checkInRepository.findAll()
+                .stream()
+                .map(CheckInResponse::from)
+                .toList();
+    }
+
     //TODO: Later, will probably need a date range search and by-event and such.
 
 }
