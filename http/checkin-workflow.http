@@ -46,7 +46,7 @@ Content-Type: application/json
   "memberId": "{{testMemberId}}",
   "staffMemberId": "{{testAdminId}}",
   "method": "MANUAL",
-  "createdAt": {{$isoTimestamp}}
+  "createdAt": "{{$isoTimestamp}}"
 }
 
 > {%

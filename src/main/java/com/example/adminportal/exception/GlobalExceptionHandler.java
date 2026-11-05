@@ -124,7 +124,7 @@ public class GlobalExceptionHandler {
             InvalidCheckInTimestampException ex,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+        return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(
                         "INVALID_CHECK_IN_TIMESTAMP",
                         ex.getMessage(),
