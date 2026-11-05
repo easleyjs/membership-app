@@ -1,0 +1,88 @@
+### 1. Find the seeded admin
+GET http://localhost:8080/api/users
+Accept: application/json
+
+> {%
+    // Remove values left over from an earlier run.
+    client.global.clear("testAdminId");
+    client.global.clear("testMemberId");
+    client.global.clear("createdCheckInId");
+
+    client.assert(response.status === 200, "User lookup failed");
+
+    const admin = response.body.find(user =>
+        user.firstName === "Josh" &&
+        user.lastName === "Test" &&
+        user.role === "ADMIN"
+    );
+
+    client.assert(admin != null, "Seeded admin was not found");
+    client.global.set("testAdminId", admin.id);
+%}
+
+### 2. Create a fresh test member
+POST http://localhost:8080/api/members
+Content-Type: application/json
+
+{
+  "firstName": "Xev",
+  "lastName": "Bellringer",
+  "email": "xev-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Member creation failed");
+    client.assert(response.body.id != null, "Member ID is missing");
+
+    client.global.set("testMemberId", response.body.id);
+%}
+
+### 3. Create a check-in
+POST http://localhost:8080/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{testMemberId}}",
+  "staffMemberId": "{{testAdminId}}",
+  "method": "MANUAL"
+}
+
+> {%
+    client.test("Creates a check-in for the correct member", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Check-in ID is missing");
+        client.assert(
+            response.body.memberId === client.global.get("testMemberId"),
+            "Wrong member"
+        );
+        client.assert(
+            response.body.checkedInById === client.global.get("testAdminId"),
+            "Wrong admin"
+        );
+        client.assert(response.body.method === "MANUAL", "Wrong method");
+    });
+
+    if (response.status === 201 && response.body.id) {
+        client.global.set("createdCheckInId", response.body.id);
+    }
+%}
+
+### 4. Verify the check-in was saved
+GET http://localhost:8080/api/checkin/{{testMemberId}}
+Accept: application/json
+
+> {%
+    client.test("Member history contains the new check-in", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a list");
+        client.assert(
+            response.body.length === 1,
+            "Expected exactly one check-in for the fresh member"
+        );
+        client.assert(
+            response.body[0].id === client.global.get("createdCheckInId"),
+            "Saved check-in ID does not match"
+        );
+    });
+%}
