@@ -8,5 +8,6 @@ import java.util.UUID;
 public record CheckInCreateRequest(
         @NotNull UUID id,
         @NotNull UUID memberId,
+        @NotNull UUID staffMemberId,
         @NotNull CheckInMethod method
 ) {}
