@@ -93,6 +93,19 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(CheckInConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckInConflict(
+            CheckInConflictException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "CHECK_IN_CONFLICT",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(
             AccessDeniedException ex,
