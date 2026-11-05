@@ -7,6 +7,7 @@ import com.example.adminportal.entity.CheckIn;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.exception.AppUserNotFoundException;
 import com.example.adminportal.exception.CheckInConflictException;
+import com.example.adminportal.exception.DuplicateCheckInException;
 import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,33 +47,50 @@ public class CheckInService {
     public CheckInResponse createCheckIn(
             CheckInCreateRequest request
     ) {
-            UUID staffId = request.staffMemberId();
-        
-        
-        // Allow an offline client to retry the same check-in.
-        CheckIn existing = checkInRepository.findById(request.id())
+
+        Member member = memberRepository.findByIdForUpdate(request.memberId())
+                .orElseThrow(() -> new MemberNotFoundException(
+                        "Member not found: " + request.memberId()
+                ));
+
+        UUID staffId = request.staffMemberId();
+
+        // Normalize timestamps to milliseconds for storage and comparison.
+        Instant createdAt = request.createdAt().truncatedTo(ChronoUnit.MILLIS);
+
+        CheckIn existingCheckIn = checkInRepository.findById(request.id())
                 .orElse(null);
 
-        if (existing != null) {
+        if (existingCheckIn != null) {
             boolean sameCheckIn =
-                    existing.getMember().getId().equals(request.memberId())
-                            && existing.getCheckedInBy().getId().equals(staffId)
-                            && existing.getMethod() == request.method();
+                    existingCheckIn.getMember().getId().equals(request.memberId())
+                            && existingCheckIn.getCheckedInBy().getId()
+                            .equals(request.staffMemberId())
+                            && existingCheckIn.getMethod() == request.method()
+                            && existingCheckIn.getCreatedAt().equals(createdAt);
 
             if (!sameCheckIn) {
                 throw new CheckInConflictException(
                         "Check-in ID already exists with different details"
                 );
-
             }
 
-            return CheckInResponse.from(existing);
+            return CheckInResponse.from(existingCheckIn);
         }
 
-        Member member = memberRepository.findById(request.memberId())
-                .orElseThrow(() -> new MemberNotFoundException(
-                        "Member not found: " + request.memberId()
-                ));
+        boolean duplicate =
+                checkInRepository
+                        .existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
+                                member.getId(),
+                                createdAt.minus(8, ChronoUnit.HOURS),
+                                createdAt.plus(8, ChronoUnit.HOURS)
+                        );
+
+        if (duplicate) {
+            throw new DuplicateCheckInException(
+                    "Member has already checked in within 8 hours of this check-in"
+            );
+        }
 
         AppUser staff = appUserRepository.findById(staffId)
                 .orElseThrow(() -> new AppUserNotFoundException(
@@ -83,7 +102,8 @@ public class CheckInService {
         checkIn.setMember(member);
         checkIn.setCheckedInBy(staff);
         checkIn.setMethod(request.method());
-        checkIn.setCreatedAt(Instant.now());
+        checkIn.setCreatedAt(request.createdAt());
+        checkIn.setReceivedAt(Instant.now());
 
         entityManager.persist(checkIn);
         entityManager.flush();

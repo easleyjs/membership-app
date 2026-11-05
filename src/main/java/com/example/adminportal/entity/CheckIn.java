@@ -29,6 +29,9 @@ public class CheckIn {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(nullable = false, updatable = false)
+    private Instant receivedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CheckInMethod method;

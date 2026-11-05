@@ -11,8 +11,9 @@ public interface CheckInRepository extends JpaRepository<CheckIn, UUID> {
     List<CheckIn> findByMember_Id(UUID memberId);
 
     // TODO: Add "..event" later
-    boolean existsByMember_IdAndCreatedAtAfter(
+    boolean existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
             UUID memberId,
-            Instant cutoff
+            Instant start,
+            Instant end
     );
 }
