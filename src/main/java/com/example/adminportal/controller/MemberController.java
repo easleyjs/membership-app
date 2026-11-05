@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/members")
 public class MemberController {
     MemberService memberService;
 
@@ -22,17 +22,17 @@ public class MemberController {
         this.memberService = memberService;
     }
 
-    @GetMapping("/members")
+    @GetMapping("")
     public List<MemberResponse> findAll() {
         return memberService.getAllMembers();
     }
 
-    @GetMapping("/members/{id}")
+    @GetMapping("/{id}")
     public MemberResponse findById(@PathVariable Long id) {
         return memberService.findMemberById(id);
     }
 
-    @PostMapping("/members")
+    @PostMapping("")
     public ResponseEntity<MemberResponse> createMember(@Valid @RequestBody MemberCreateRequest memberRequest) {
 
         MemberResponse createdMember = memberService.createMember(memberRequest);

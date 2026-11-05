@@ -93,6 +93,45 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(CheckInConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckInConflict(
+            CheckInConflictException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "CHECK_IN_CONFLICT",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(DuplicateCheckInException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateCheckIn(
+            DuplicateCheckInException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "DUPLICATE_CHECK_IN",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(InvalidCheckInTimestampException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCheckInTimestamp(
+            InvalidCheckInTimestampException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        "INVALID_CHECK_IN_TIMESTAMP",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(
             AccessDeniedException ex,

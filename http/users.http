@@ -15,3 +15,21 @@ Content-Type: application/json
 {
   "memberId": "<TBD>"
 }
+
+### Find the seeded test admin
+GET http://localhost:8080/api/users
+Accept: application/json
+
+> {%
+    const admin = response.body.find(user =>
+        user.firstName === "Josh" &&
+        user.lastName === "Test" &&
+        user.role === "ADMIN"
+    );
+
+    if (!admin) {
+        throw new Error("Seeded test admin was not found");
+    }
+
+    client.global.set("testAdminId", admin.id);
+%}
