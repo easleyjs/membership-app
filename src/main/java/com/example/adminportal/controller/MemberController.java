@@ -22,7 +22,7 @@ public class MemberController {
         this.memberService = memberService;
     }
 
-    @GetMapping("/")
+    @GetMapping("")
     public List<MemberResponse> findAll() {
         return memberService.getAllMembers();
     }
@@ -32,7 +32,7 @@ public class MemberController {
         return memberService.findMemberById(id);
     }
 
-    @PostMapping("/")
+    @PostMapping("")
     public ResponseEntity<MemberResponse> createMember(@Valid @RequestBody MemberCreateRequest memberRequest) {
 
         MemberResponse createdMember = memberService.createMember(memberRequest);

@@ -5,7 +5,7 @@ Accept: application/json
 
 ### Get one member
 
-GET http://localhost:8080/api/members/4
+GET http://localhost:8080/api/members/10010
 Accept: application/json
 
 ### Create a test member
@@ -13,9 +13,9 @@ POST http://localhost:8080/api/members
 Content-Type: application/json
 
 {
-  "firstName": "Josh",
-  "lastName": "Easley",
-  "email": "josh@java.com"
+  "firstName": "Xev",
+  "lastName": "Bellringer",
+  "email": "xev@lexx.com"
 }
 
 > {%
