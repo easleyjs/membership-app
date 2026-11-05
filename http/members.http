@@ -17,3 +17,7 @@ Content-Type: application/json
   "lastName": "Easley",
   "email": "josh@java.com"
 }
+
+> {%
+    client.global.set("testMemberId", response.body.id);
+%}

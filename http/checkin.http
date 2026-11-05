@@ -1,0 +1,24 @@
+### Get all members
+
+GET http://localhost:8080/api/members
+Accept: application/json
+
+### Get one member
+
+GET http://localhost:8080/api/checkin/{{testAdminId}}
+Accept: application/json
+
+### Create a check-in
+POST http://localhost:8080/api/members
+Content-Type: application/json
+
+### Create a check-in
+POST http://localhost:8080/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{testMemberId}}",
+  "staffMemberId": "{{testAdminId}}",
+  "method": "MANUAL"
+}
