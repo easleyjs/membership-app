@@ -6,6 +6,7 @@ import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.CheckIn;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.exception.AppUserNotFoundException;
+import com.example.adminportal.exception.CheckInConflictException;
 import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
@@ -36,6 +37,7 @@ public class CheckInService {
         this.checkInRepository = checkInRepository;
         this.memberRepository = memberRepository;
         this.appUserRepository = appUserRepository;
+        this.entityManager = entityManager;
     }
 
     //Perform a check-in
@@ -57,10 +59,10 @@ public class CheckInService {
                             && existing.getMethod() == request.method();
 
             if (!sameCheckIn) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
+                throw new CheckInConflictException(
                         "Check-in ID already exists with different details"
                 );
+
             }
 
             return CheckInResponse.from(existing);
