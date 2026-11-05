@@ -102,7 +102,7 @@ public class CheckInService {
         checkIn.setMember(member);
         checkIn.setCheckedInBy(staff);
         checkIn.setMethod(request.method());
-        checkIn.setCreatedAt(request.createdAt());
+        checkIn.setCreatedAt(createdAt);
         checkIn.setReceivedAt(Instant.now());
 
         entityManager.persist(checkIn);
