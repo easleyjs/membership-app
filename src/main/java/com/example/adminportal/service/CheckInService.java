@@ -5,10 +5,7 @@ import com.example.adminportal.dto.CheckInResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.CheckIn;
 import com.example.adminportal.entity.Member;
-import com.example.adminportal.exception.AppUserNotFoundException;
-import com.example.adminportal.exception.CheckInConflictException;
-import com.example.adminportal.exception.DuplicateCheckInException;
-import com.example.adminportal.exception.MemberNotFoundException;
+import com.example.adminportal.exception.*;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
 import com.example.adminportal.repository.MemberRepository;
@@ -19,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +27,11 @@ public class CheckInService {
     MemberRepository memberRepository;
     AppUserRepository appUserRepository;
     EntityManager entityManager;
+
+    // How far in the future can a check-in creation timestamp be
+    private static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(5);
+    // How many days old can a check-in timestamp be
+    private static final Duration MAX_OFFLINE_AGE = Duration.ofDays(7);
 
     public CheckInService(
             CheckInRepository checkInRepository,
@@ -78,6 +81,22 @@ public class CheckInService {
             return CheckInResponse.from(existingCheckIn);
         }
 
+        // Allow for offline sync check-ins
+        Instant receivedAt = Instant.now();
+
+        if (createdAt.isAfter(receivedAt.plus(MAX_FUTURE_SKEW))) {
+            throw new InvalidCheckInTimestampException(
+                    "Check-in time cannot be more than 5 minutes in the future"
+            );
+        }
+
+        if (createdAt.isBefore(receivedAt.minus(MAX_OFFLINE_AGE))) {
+            throw new InvalidCheckInTimestampException(
+                    "Check-in time cannot be more than 7 days old"
+            );
+        }
+
+        // Check for duplicates - same member, same timeframe <and same event, once added>
         boolean duplicate =
                 checkInRepository
                         .existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
@@ -103,7 +122,7 @@ public class CheckInService {
         checkIn.setCheckedInBy(staff);
         checkIn.setMethod(request.method());
         checkIn.setCreatedAt(createdAt);
-        checkIn.setReceivedAt(Instant.now());
+        checkIn.setReceivedAt(receivedAt);
 
         entityManager.persist(checkIn);
         entityManager.flush();

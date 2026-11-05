@@ -16,5 +16,6 @@ Content-Type: application/json
   "id": "{{$uuid}}",
   "memberId": "{{testMemberId}}",
   "staffMemberId": "{{testAdminId}}",
-  "method": "MANUAL"
+  "method": "MANUAL",
+  "createdAt": {{$isoTimestamp}}
 }

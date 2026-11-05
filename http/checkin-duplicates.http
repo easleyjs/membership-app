@@ -1,0 +1,232 @@
+# Run all requests in this file with the app running under the dev profile.
+# Each run creates a fresh member and two accepted check-ins.
+@baseUrl = http://localhost:8080
+
+### 1. Find the seeded admin and initialize this run
+GET {{baseUrl}}/api/users
+Accept: application/json
+
+> {%
+    ["dupAdminId", "dupMemberId", "dupOriginalId", "dupBoundaryId",
+     "dupOriginalResponse", "dupOriginalAt", "dupSevenHoursLater",
+     "dupSevenHoursEarlier", "dupEightHoursLater"].forEach(key =>
+        client.global.clear(key)
+    );
+
+    client.assert(response.status === 200, "Admin lookup failed");
+    const admin = response.body.find(user =>
+        user.firstName === "Josh" &&
+        user.lastName === "Test" &&
+        user.role === "ADMIN"
+    );
+    client.assert(admin != null, "Seeded admin was not found");
+    client.global.set("dupAdminId", admin.id);
+
+    // All timestamps remain in the past and within the seven-day limit.
+    const hour = 60 * 60 * 1000;
+    const original = Date.now() - 16 * hour;
+    client.global.set("dupOriginalAt", new Date(original).toISOString());
+    client.global.set("dupSevenHoursLater", new Date(original + 7 * hour).toISOString());
+    client.global.set("dupSevenHoursEarlier", new Date(original - 7 * hour).toISOString());
+    client.global.set("dupEightHoursLater", new Date(original + 8 * hour).toISOString());
+%}
+
+### 2. Create a fresh member
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+
+{
+  "firstName": "Duplicate",
+  "lastName": "Test",
+  "email": "duplicate-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Member creation failed");
+    client.assert(response.body.id != null, "Member ID is missing");
+    client.global.set("dupMemberId", response.body.id);
+%}
+
+### 3. Create the original check-in
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupOriginalAt}}"
+}
+
+> {%
+    client.test("Original check-in is accepted", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Check-in ID is missing");
+        client.assert(response.body.memberId === client.global.get("dupMemberId"), "Wrong member");
+        client.assert(response.body.checkedInById === client.global.get("dupAdminId"), "Wrong admin");
+        client.assert(response.body.method === "MANUAL", "Wrong method");
+        client.assert(Date.parse(response.body.createdAt) === Date.parse(client.global.get("dupOriginalAt")), "Wrong timestamp");
+    });
+
+    if (response.status === 201 && response.body.id) {
+        client.global.set("dupOriginalId", response.body.id);
+        client.global.set("dupOriginalResponse", JSON.stringify(response.body));
+    }
+%}
+
+### 4. Retry the exact same UUID and payload
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{dupOriginalId}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupOriginalAt}}"
+}
+
+> {%
+    client.test("Identical retry returns the original record", function () {
+        // The current controller returns 201 for both creation and retries.
+        client.assert(response.status === 201, "Expected HTTP 201");
+        const original = JSON.parse(client.global.get("dupOriginalResponse"));
+        Object.keys(original).forEach(key =>
+            client.assert(response.body[key] === original[key], "Retry changed field: " + key)
+        );
+    });
+%}
+
+### 5. Same UUID with a different method must conflict
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{dupOriginalId}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "QR_SCAN",
+  "createdAt": "{{dupOriginalAt}}"
+}
+
+> {%
+    client.test("Changed payload with the same UUID conflicts", function () {
+        client.assert(response.status === 409, "Expected HTTP 409");
+        client.assert(response.body.code === "CHECK_IN_CONFLICT", "Wrong error code");
+    });
+%}
+
+### 6. A new UUID at the same timestamp is duplicate attendance
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupOriginalAt}}"
+}
+
+> {%
+    client.test("New UUID at the same time is rejected", function () {
+        client.assert(response.status === 409, "Expected HTTP 409");
+        client.assert(response.body.code === "DUPLICATE_CHECK_IN", "Wrong error code");
+    });
+%}
+
+### 7. A check-in seven hours later is still a duplicate
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupSevenHoursLater}}"
+}
+
+> {%
+    client.test("Seven hours later is rejected", function () {
+        client.assert(response.status === 409, "Expected HTTP 409");
+        client.assert(response.body.code === "DUPLICATE_CHECK_IN", "Wrong error code");
+    });
+%}
+
+### 8. An older visit uploaded out of order must also be rejected
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupSevenHoursEarlier}}"
+}
+
+> {%
+    client.test("Seven hours earlier is rejected", function () {
+        client.assert(response.status === 409, "Expected HTTP 409");
+        client.assert(response.body.code === "DUPLICATE_CHECK_IN", "Wrong error code");
+    });
+%}
+
+### 9. Retries and rejected requests must not insert extra rows
+GET {{baseUrl}}/api/checkin/{{dupMemberId}}
+Accept: application/json
+
+> {%
+    client.test("Only the original check-in exists", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a list");
+        client.assert(response.body.length === 1, "Expected exactly one check-in");
+        const original = JSON.parse(client.global.get("dupOriginalResponse"));
+        Object.keys(original).forEach(key =>
+            client.assert(response.body[0][key] === original[key], "Original record changed: " + key)
+        );
+    });
+%}
+
+### 10. Exactly eight hours later is allowed
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{dupMemberId}}",
+  "staffMemberId": "{{dupAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{dupEightHoursLater}}"
+}
+
+> {%
+    client.test("Exactly eight hours later is accepted", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Check-in ID is missing");
+        client.assert(response.body.id !== client.global.get("dupOriginalId"), "Expected a new record");
+        client.assert(response.body.memberId === client.global.get("dupMemberId"), "Wrong member");
+        client.assert(Date.parse(response.body.createdAt) === Date.parse(client.global.get("dupEightHoursLater")), "Wrong timestamp");
+    });
+
+    if (response.status === 201 && response.body.id) {
+        client.global.set("dupBoundaryId", response.body.id);
+    }
+%}
+
+### 11. Verify both accepted records exist
+GET {{baseUrl}}/api/checkin/{{dupMemberId}}
+Accept: application/json
+
+> {%
+    client.test("Only the two accepted check-ins exist", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a list");
+        client.assert(response.body.length === 2, "Expected exactly two check-ins");
+        const ids = response.body.map(checkIn => checkIn.id);
+        client.assert(ids.includes(client.global.get("dupOriginalId")), "Original check-in is missing");
+        client.assert(ids.includes(client.global.get("dupBoundaryId")), "Boundary check-in is missing");
+    });
+%}
