@@ -5,7 +5,7 @@ Accept: application/json
 
 ### Get check-ins by User ID
 
-GET http://localhost:8080/api/checkin/{{testAdminId}}
+GET http://localhost:8080/api/checkin/{{testMemberId}}
 Accept: application/json
 
 ### Create a check-in
