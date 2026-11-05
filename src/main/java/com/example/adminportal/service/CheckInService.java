@@ -111,6 +111,7 @@ public class CheckInService {
             );
         }
 
+        // TODO: Need to check whether staff member has access to do a check-in
         AppUser staff = appUserRepository.findById(staffId)
                 .orElseThrow(() -> new AppUserNotFoundException(
                         "App user not found: " + staffId
