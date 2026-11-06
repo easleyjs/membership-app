@@ -3,6 +3,8 @@ package com.example.adminportal.service;
 import com.example.adminportal.dto.EventCreateRequest;
 import com.example.adminportal.dto.EventResponse;
 import com.example.adminportal.entity.Event;
+import com.example.adminportal.entity.EventLocation;
+import com.example.adminportal.entity.EventStatus;
 import com.example.adminportal.exception.ResourceNotFoundException;
 import com.example.adminportal.repository.EventRepository;
 import jakarta.validation.Valid;
@@ -33,6 +35,7 @@ public class EventService {
         newEvent.setMembershipRequired(request.membershipRequired());
         newEvent.setCoverRequired(request.coverRequired());
         newEvent.setLocation(request.location());
+        newEvent.setStatus(EventStatus.ACTIVE);
 
         Event savedEvent = eventRepository.save(newEvent);
 
@@ -55,6 +58,7 @@ public class EventService {
                 .toList();
     }
 
+    @Transactional
     public EventResponse updateEvent(
             Long id,
             @Valid EventCreateRequest request
@@ -74,6 +78,18 @@ public class EventService {
         return EventResponse.from(event);
     }
     // TODO: Future partial edit/ PATCH route
+
+    @Transactional
+    public EventResponse disableEvent(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Event not found: " + eventId
+                ));
+
+        event.setStatus(EventStatus.ARCHIVED);
+
+        return EventResponse.from(event);
+    }
 
     @Transactional
     public void deleteEvent(Long eventId) {
