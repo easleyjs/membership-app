@@ -14,8 +14,7 @@ public record EventCreateRequest(
         LocalDateTime endsAt,
         boolean membershipRequired,
         boolean coverRequired,
-        @NotNull EventLocation location,
-        @NotNull EventStatus status
+        @NotNull EventLocation location
         ) {
     @AssertTrue(
             message = "Provide both start and end times, with end after start, "

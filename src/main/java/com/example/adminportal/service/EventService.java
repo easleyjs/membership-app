@@ -44,7 +44,7 @@ public class EventService {
 
     public EventResponse getEvent(Long eventId) {
         Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Event not found"
                 ));
 
