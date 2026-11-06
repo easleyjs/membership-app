@@ -1,0 +1,393 @@
+# Start the app, then use Run All Requests in File.
+# Creates two test events and deletes both at the end of a successful run.
+# LocalDateTime values intentionally have no timezone suffix.
+# "End before start" and "start after end" are the same invalid relationship;
+# test it during creation and again during an update.
+@baseUrl = http://localhost:8080
+
+### 1. Create a scheduled event crossing midnight
+< {%
+    ["eventWorkflowId", "eventWorkflowName", "eventWorkflowOriginal",
+     "eventWorkflowUpdated", "eventWorkflowOngoingId"].forEach(key =>
+        client.global.clear(key)
+    );
+%}
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "HTTP event {{$uuid}}",
+  "startsAt": "2030-11-05T20:00:00",
+  "endsAt": "2030-11-06T02:00:00",
+  "membershipRequired": true,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Creates a scheduled event with HTTP 201", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Missing event ID");
+        client.assert(response.body.status === "ACTIVE", "Expected ACTIVE status");
+        client.assert(response.body.startsAt === "2030-11-05T20:00:00", "Wrong start time");
+        client.assert(response.body.endsAt === "2030-11-06T02:00:00", "Wrong end time");
+        client.assert(response.body.membershipRequired === true, "Wrong membership flag");
+        client.assert(response.body.coverRequired === false, "Wrong cover flag");
+        client.assert(response.body.location === "OUTLAND", "Wrong location");
+    });
+    if (response.status === 201 && response.body.id != null) {
+        client.global.set("eventWorkflowId", String(response.body.id));
+        client.global.set("eventWorkflowName", response.body.name);
+        client.global.set("eventWorkflowOriginal", JSON.stringify(response.body));
+    }
+%}
+
+### 2. Fetch the created event by path ID
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("GET returns the persisted event", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        const original = JSON.parse(client.global.get("eventWorkflowOriginal"));
+        Object.keys(original).forEach(key =>
+            client.assert(response.body[key] === original[key], "Wrong field: " + key)
+        );
+    });
+%}
+
+### 3. Reject creation when the end is before the start
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} rejected-end-before-start",
+  "startsAt": "2030-11-06T02:00:00",
+  "endsAt": "2030-11-05T20:00:00",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Rejects end before start with a date validation error", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("validDateRange:")), "Missing date-range error");
+    });
+%}
+
+### 4. Reject an update that moves the start after the end
+PUT {{baseUrl}}/api/events/{{eventWorkflowId}}
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} rejected-update",
+  "startsAt": "2030-11-06T03:00:00",
+  "endsAt": "2030-11-06T02:00:00",
+  "membershipRequired": false,
+  "coverRequired": true,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Rejects start after end during update", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("validDateRange:")), "Missing date-range error");
+    });
+%}
+
+### 5. Reject equal start and end times
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} rejected-equal-dates",
+  "startsAt": "2030-11-05T20:00:00",
+  "endsAt": "2030-11-05T20:00:00",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Rejects a zero-length event", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("validDateRange:")), "Missing date-range error");
+    });
+%}
+
+### 6. Reject a start date without an end date
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} rejected-missing-end",
+  "startsAt": "2030-11-05T20:00:00",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Rejects a missing end date", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("validDateRange:")), "Missing date-range error");
+    });
+%}
+
+### 7. Reject an end date without a start date
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} rejected-missing-start",
+  "endsAt": "2030-11-06T02:00:00",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Rejects a missing start date", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("validDateRange:")), "Missing date-range error");
+    });
+%}
+
+### 8. Verify the rejected update did not change the stored event
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("Rejected update leaves the original event unchanged", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        const original = JSON.parse(client.global.get("eventWorkflowOriginal"));
+        Object.keys(original).forEach(key =>
+            client.assert(response.body[key] === original[key], "Rejected update changed: " + key)
+        );
+    });
+%}
+
+### 9. Apply a valid full update
+PUT {{baseUrl}}/api/events/{{eventWorkflowId}}
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} updated",
+  "startsAt": "2030-11-07T19:00:00",
+  "endsAt": "2030-11-08T01:00:00",
+  "membershipRequired": false,
+  "coverRequired": true,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Full update changes the existing event", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(String(response.body.id) === client.global.get("eventWorkflowId"), "Event ID changed");
+        client.assert(response.body.name === client.global.get("eventWorkflowName") + " updated", "Wrong name");
+        client.assert(response.body.startsAt === "2030-11-07T19:00:00", "Wrong start time");
+        client.assert(response.body.endsAt === "2030-11-08T01:00:00", "Wrong end time");
+        client.assert(response.body.membershipRequired === false, "Membership flag was not updated");
+        client.assert(response.body.coverRequired === true, "Cover flag was not updated");
+        client.assert(response.body.location === "OUTLAND", "Wrong location");
+        client.assert(response.body.status === "ACTIVE", "Update changed status");
+    });
+    if (response.status === 200) {
+        client.global.set("eventWorkflowUpdated", JSON.stringify(response.body));
+    }
+%}
+
+### 10. Verify the update was persisted
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("Updated fields persist across requests", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        const updated = JSON.parse(client.global.get("eventWorkflowUpdated"));
+        Object.keys(updated).forEach(key =>
+            client.assert(response.body[key] === updated[key], "Update was not saved: " + key)
+        );
+    });
+%}
+
+### 11. Clear both dates to make the event ongoing
+PUT {{baseUrl}}/api/events/{{eventWorkflowId}}
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} updated",
+  "startsAt": null,
+  "endsAt": null,
+  "membershipRequired": false,
+  "coverRequired": true,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Allows both dates to be cleared", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.startsAt === null && response.body.endsAt === null, "Expected both dates to be null");
+    });
+%}
+
+### 12. Verify the cleared schedule was persisted
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("Cleared dates remain null after reload", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.startsAt === null && response.body.endsAt === null, "Schedule was not cleared");
+        client.assert(response.body.status === "ACTIVE", "Clearing dates changed status");
+    });
+%}
+
+### 13. Create another ongoing event with both dates omitted
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} ongoing",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("Allows creation without dates", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Missing event ID");
+        client.assert(String(response.body.id) !== client.global.get("eventWorkflowId"), "Expected a new event ID");
+        client.assert(response.body.startsAt === null && response.body.endsAt === null, "Expected null dates");
+        client.assert(response.body.status === "ACTIVE", "Expected ACTIVE status");
+    });
+    if (response.status === 201 && response.body.id != null) {
+        client.global.set("eventWorkflowOngoingId", String(response.body.id));
+    }
+%}
+
+### 14. Archive the first event
+PATCH {{baseUrl}}/api/events/{{eventWorkflowId}}/disable
+
+> {%
+    client.test("Disable archives the existing event", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(String(response.body.id) === client.global.get("eventWorkflowId"), "Wrong event archived");
+        client.assert(response.body.status === "ARCHIVED", "Expected ARCHIVED status");
+    });
+%}
+
+### 15. Verify archival persisted
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("Archived event remains available by ID", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.status === "ARCHIVED", "Archive status was not saved");
+    });
+%}
+
+### 16. List events and confirm invalid creations inserted nothing
+GET {{baseUrl}}/api/events
+Accept: application/json
+
+> {%
+    client.test("List contains only the two accepted events for this run", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a list");
+        const runEvents = response.body.filter(event =>
+            event.name.startsWith(client.global.get("eventWorkflowName"))
+        );
+        client.assert(runEvents.length === 2, "Rejected creation inserted a row, or an accepted event is missing");
+        const archived = runEvents.find(event => String(event.id) === client.global.get("eventWorkflowId"));
+        const ongoing = runEvents.find(event => String(event.id) === client.global.get("eventWorkflowOngoingId"));
+        client.assert(archived != null && archived.status === "ARCHIVED", "Archived event is missing");
+        client.assert(ongoing != null && ongoing.status === "ACTIVE", "Ongoing event is missing");
+    });
+%}
+
+### 17. Delete the archived event
+DELETE {{baseUrl}}/api/events/{{eventWorkflowId}}
+
+> {%
+    client.test("Delete returns HTTP 204", function () {
+        client.assert(response.status === 204, "Expected HTTP 204");
+    });
+%}
+
+### 18. A deleted event must return 404
+GET {{baseUrl}}/api/events/{{eventWorkflowId}}
+Accept: application/json
+
+> {%
+    client.test("GET of a deleted event returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+    });
+%}
+
+### 19. Updating a deleted event must return 404
+PUT {{baseUrl}}/api/events/{{eventWorkflowId}}
+Content-Type: application/json
+
+{
+  "name": "{{eventWorkflowName}} deleted",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.test("PUT of a deleted event returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+    });
+%}
+
+### 20. Archiving a deleted event must return 404
+PATCH {{baseUrl}}/api/events/{{eventWorkflowId}}/disable
+
+> {%
+    client.test("Disable of a deleted event returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+    });
+%}
+
+### 21. Deleting the same event again must return 404
+DELETE {{baseUrl}}/api/events/{{eventWorkflowId}}
+
+> {%
+    client.test("Repeated delete returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+    });
+%}
+
+### 22. Clean up the second event
+DELETE {{baseUrl}}/api/events/{{eventWorkflowOngoingId}}
+
+> {%
+    client.test("Deletes the ongoing test event", function () {
+        client.assert(response.status === 204, "Expected HTTP 204");
+    });
+%}
+
+### 23. Verify cleanup
+GET {{baseUrl}}/api/events/{{eventWorkflowOngoingId}}
+Accept: application/json
+
+> {%
+    client.test("Second test event is gone", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+    });
+%}
