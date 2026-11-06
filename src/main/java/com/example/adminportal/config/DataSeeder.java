@@ -1,10 +1,9 @@
 package com.example.adminportal.config;
 
 import com.example.adminportal.dto.MemberCreateRequest;
-import com.example.adminportal.entity.AppUser;
-import com.example.adminportal.entity.Member;
-import com.example.adminportal.entity.UserRole;
+import com.example.adminportal.entity.*;
 import com.example.adminportal.repository.AppUserRepository;
+import com.example.adminportal.repository.EventRepository;
 import com.example.adminportal.repository.MemberRepository;
 import com.example.adminportal.service.MemberService;
 import org.springframework.boot.CommandLineRunner;
@@ -52,6 +51,26 @@ public class DataSeeder {
 
             appUserRepo.save(user);
 
+        };
+    }
+    @Bean
+    CommandLineRunner seedFreeEvent(EventRepository eventRepo) {
+        return args -> {
+            String name = "OUTLAND -- NO COVER";
+
+            if (eventRepo.existsByName(name)) {
+                return;
+            }
+
+            Event event = new Event();
+            event.setName(name);
+            event.setMembershipRequired(true);
+            event.setCoverRequired(false);
+            event.setLocation(EventLocation.OUTLAND);
+            event.setStatus(EventStatus.ACTIVE);
+
+            // No start/end dates: this is an ongoing event.
+            eventRepo.save(event);
         };
     }
 }
