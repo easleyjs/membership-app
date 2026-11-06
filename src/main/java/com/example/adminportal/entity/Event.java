@@ -1,9 +1,15 @@
 package com.example.adminportal.entity;
 
+import com.example.adminportal.dto.EventResponse;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+@Entity
+@Getter
+@Setter
 public class Event {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,4 +25,7 @@ public class Event {
 
     @Enumerated(EnumType.STRING)
     private EventLocation location;
+
+    @Enumerated(EnumType.STRING)
+    private EventStatus status;
 }
