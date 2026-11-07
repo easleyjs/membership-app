@@ -11,7 +11,9 @@ import com.example.adminportal.repository.MemberRepository;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -58,8 +60,17 @@ public class MemberNoteService {
             throw new MemberNotFoundException("Member : " + memberNumber + " not found.");
         }
 
+        Sort sort = pageable.getSort();
+        // A unique final key keeps notes with equal timestamps in a stable order.
+        if (sort.getOrderFor("id") == null) {
+            sort = sort.and(Sort.by(Sort.Direction.DESC, "id"));
+        }
+        Pageable stablePageable = pageable.isPaged()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort)
+                : Pageable.unpaged(sort);
+
         return memberNoteRepository
-                .findByMember_MemberNumber(memberNumber, pageable)
+                .findByMember_MemberNumber(memberNumber, stablePageable)
                 .map(MemberNoteResponse::from);
     }
 
