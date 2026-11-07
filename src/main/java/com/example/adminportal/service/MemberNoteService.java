@@ -4,6 +4,8 @@ import com.example.adminportal.dto.MemberNoteCreateRequest;
 import com.example.adminportal.dto.MemberNoteResponse;
 import com.example.adminportal.entity.MemberNote;
 import com.example.adminportal.exception.MemberNotFoundException;
+import com.example.adminportal.exception.ResourceNotFoundException;
+import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,31 +15,34 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-import java.util.List;
-import java.util.UUID;
-
 @Service
 @Validated
 public class MemberNoteService {
     MemberNoteRepository memberNoteRepository;
     MemberRepository memberRepository;
+    private final AppUserRepository appUserRepository;
 
     public MemberNoteService(
             MemberNoteRepository memberNoteRepository,
-            MemberRepository memberRepository
+            MemberRepository memberRepository,
+            AppUserRepository appUserRepository
     ) {
         this.memberNoteRepository = memberNoteRepository;
         this.memberRepository = memberRepository;
+        this.appUserRepository = appUserRepository;
     }
 
     @Transactional
-    public MemberNoteResponse createMemberNote(@Valid MemberNoteCreateRequest request) {
+    public MemberNoteResponse createMemberNote(Long memberNumber, @Valid MemberNoteCreateRequest request) {
+        var member = memberRepository.findByMemberNumber(memberNumber)
+                .orElseThrow(() -> new MemberNotFoundException("Member: " + memberNumber + " not found."));
+        var author = appUserRepository.findById(request.createdById())
+                .orElseThrow(() -> new ResourceNotFoundException("User: " + request.createdById() + " not found."));
         MemberNote newMemberNote = new MemberNote();
 
-        newMemberNote.setMember(request.member());
-        newMemberNote.setCreatedBy(request.createdBy());
+        newMemberNote.setMember(member);
+        newMemberNote.setCreatedBy(author);
         newMemberNote.setContent(request.content());
-        newMemberNote.setCreatedAt(request.createdAt());
 
         MemberNote savedMemberNote = memberNoteRepository.save(newMemberNote);
 
@@ -54,13 +59,8 @@ public class MemberNoteService {
         }
 
         return memberNoteRepository
-                .findByMember_Id(memberNumber, pageable)
-                .map(note -> new MemberNoteResponse(
-                        note.getId(),
-                        note.getContent(),
-                        note.getCreatedBy().getMember().getFirstName(),
-                        note.getCreatedAt()
-                ));
+                .findByMember_MemberNumber(memberNumber, pageable)
+                .map(MemberNoteResponse::from);
     }
 
 }

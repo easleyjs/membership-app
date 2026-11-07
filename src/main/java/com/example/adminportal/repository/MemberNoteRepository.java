@@ -6,8 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MemberNoteRepository extends JpaRepository<MemberNote,Long> {
-    Page<MemberNote> findByMember_Id(
-            Long memberId,
+    Page<MemberNote> findByMember_MemberNumber(
+            Long memberNumber,
             Pageable pageable
     );
 }

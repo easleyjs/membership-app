@@ -3,7 +3,6 @@ package com.example.adminportal.service;
 import com.example.adminportal.dto.EventCreateRequest;
 import com.example.adminportal.dto.EventResponse;
 import com.example.adminportal.entity.Event;
-import com.example.adminportal.entity.EventLocation;
 import com.example.adminportal.entity.EventStatus;
 import com.example.adminportal.exception.ResourceNotFoundException;
 import com.example.adminportal.repository.EventRepository;
@@ -91,14 +90,6 @@ public class EventService {
         return EventResponse.from(event);
     }
 
-    @Transactional
-    public void deleteEvent(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Event not found: " + eventId
-                ));
 
-        eventRepository.delete(event);
-    }
 
 }

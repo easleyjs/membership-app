@@ -1,15 +1,12 @@
 package com.example.adminportal.dto;
 
-import com.example.adminportal.entity.AppUser;
-import com.example.adminportal.entity.Member;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
-import java.time.Instant;
+import java.util.UUID;
 
 public record MemberNoteCreateRequest(
-        @NotNull Member member,
-        @NotNull AppUser createdBy,
-        @NotBlank String content,
-        @NotNull Instant createdAt
+        @NotNull UUID createdById,
+        @NotBlank @Size(max = 2000) String content
         ) {}
