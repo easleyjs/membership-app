@@ -1,104 +1,66 @@
 package com.example.adminportal.service;
 
-import com.example.adminportal.dto.EventCreateRequest;
-import com.example.adminportal.dto.EventResponse;
-import com.example.adminportal.entity.Event;
-import com.example.adminportal.entity.EventLocation;
-import com.example.adminportal.entity.EventStatus;
-import com.example.adminportal.exception.ResourceNotFoundException;
-import com.example.adminportal.repository.EventRepository;
+import com.example.adminportal.dto.MemberNoteCreateRequest;
+import com.example.adminportal.dto.MemberNoteResponse;
+import com.example.adminportal.entity.MemberNote;
+import com.example.adminportal.exception.MemberNotFoundException;
+import com.example.adminportal.repository.MemberNoteRepository;
+import com.example.adminportal.repository.MemberRepository;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
-import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Validated
-public class EventService {
-    EventRepository eventRepository;
+public class MemberNoteService {
+    MemberNoteRepository memberNoteRepository;
+    MemberRepository memberRepository;
 
-    public EventService(
-            EventRepository eventRepository
+    public MemberNoteService(
+            MemberNoteRepository memberNoteRepository,
+            MemberRepository memberRepository
     ) {
-        this.eventRepository = eventRepository;
+        this.memberNoteRepository = memberNoteRepository;
+        this.memberRepository = memberRepository;
     }
 
     @Transactional
-    public EventResponse createEvent(@Valid EventCreateRequest request) {
-        Event newEvent = new Event();
+    public MemberNoteResponse createMemberNote(@Valid MemberNoteCreateRequest request) {
+        MemberNote newMemberNote = new MemberNote();
 
-        newEvent.setName(request.name());
-        newEvent.setStartsAt(request.startsAt());
-        newEvent.setEndsAt(request.endsAt());
-        newEvent.setMembershipRequired(request.membershipRequired());
-        newEvent.setCoverRequired(request.coverRequired());
-        newEvent.setLocation(request.location());
-        newEvent.setStatus(EventStatus.ACTIVE);
+        newMemberNote.setMember(request.member());
+        newMemberNote.setCreatedBy(request.createdBy());
+        newMemberNote.setContent(request.content());
+        newMemberNote.setCreatedAt(request.createdAt());
 
-        Event savedEvent = eventRepository.save(newEvent);
+        MemberNote savedMemberNote = memberNoteRepository.save(newMemberNote);
 
-        return EventResponse.from(savedEvent);
+        return MemberNoteResponse.from(savedMemberNote);
     }
 
-    public EventResponse getEvent(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Event not found"
+    @Transactional(readOnly = true)
+    public Page<MemberNoteResponse> getNotes(
+            Long memberNumber,
+            Pageable pageable) {
+
+        if (!memberRepository.existsByMemberNumber(memberNumber)) {
+            throw new MemberNotFoundException("Member : " + memberNumber + " not found.");
+        }
+
+        return memberNoteRepository
+                .findByMember_Id(memberNumber, pageable)
+                .map(note -> new MemberNoteResponse(
+                        note.getId(),
+                        note.getContent(),
+                        note.getCreatedBy().getMember().getFirstName(),
+                        note.getCreatedAt()
                 ));
-
-        return EventResponse.from(event);
-    }
-
-    public List<EventResponse> getAllEvents() {
-        return eventRepository.findAll()
-                .stream()
-                .map(EventResponse::from)
-                .toList();
-    }
-
-    @Transactional
-    public EventResponse updateEvent(
-            Long id,
-            @Valid EventCreateRequest request
-    ) {
-        Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Event not found: " + id
-                ));
-
-        event.setName(request.name());
-        event.setStartsAt(request.startsAt());
-        event.setEndsAt(request.endsAt());
-        event.setMembershipRequired(request.membershipRequired());
-        event.setCoverRequired(request.coverRequired());
-        event.setLocation(request.location());
-
-        return EventResponse.from(event);
-    }
-    // TODO: Future partial edit/ PATCH route
-
-    @Transactional
-    public EventResponse disableEvent(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Event not found: " + eventId
-                ));
-
-        event.setStatus(EventStatus.ARCHIVED);
-
-        return EventResponse.from(event);
-    }
-
-    @Transactional
-    public void deleteEvent(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Event not found: " + eventId
-                ));
-
-        eventRepository.delete(event);
     }
 
 }
