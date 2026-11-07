@@ -90,6 +90,14 @@ public class EventService {
         return EventResponse.from(event);
     }
 
+    @Transactional
+    public void deleteEvent(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Event not found: " + eventId
+                ));
 
+        eventRepository.delete(event);
+    }
 
 }
