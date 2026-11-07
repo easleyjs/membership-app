@@ -38,6 +38,10 @@ public class Membership {
 
     private Instant validUntil;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "created_by", nullable = true, updatable = false)
+    private AppUser createdBy;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
