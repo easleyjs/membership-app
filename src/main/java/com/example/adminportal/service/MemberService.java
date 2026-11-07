@@ -3,29 +3,45 @@ package com.example.adminportal.service;
 import com.example.adminportal.dto.MemberCreateRequest;
 import com.example.adminportal.dto.MemberResponse;
 import com.example.adminportal.entity.Member;
+import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class MemberService {
-    MemberRepository memberRepository;
+    private final MemberRepository memberRepository;
+    private final MemberNoteRepository memberNoteRepository;
 
-    public MemberService(MemberRepository memberRepository) {
+    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository) {
         this.memberRepository = memberRepository;
+        this.memberNoteRepository = memberNoteRepository;
     }
 
     public List<MemberResponse> getAllMembers() {
-        return memberRepository.findAll()
+        List<Member> members = memberRepository.findAll();
+        if (members.isEmpty()) {
+            return List.of();
+        }
+
+        var memberIds = members.stream().map(Member::getId).toList();
+        var noteCounts = memberNoteRepository.countNotesByMemberIds(memberIds).stream()
+                .collect(Collectors.toMap(
+                        MemberNoteRepository.MemberNoteCount::getMemberId,
+                        MemberNoteRepository.MemberNoteCount::getNoteCount));
+
+        return members
                 .stream()
-                .map(MemberResponse::from)
+                .map(member -> MemberResponse.from(member, noteCounts.getOrDefault(member.getId(), 0L)))
                 .toList();
     }
 
     public MemberResponse findMemberById(Long id) {
-        return MemberResponse.from(memberRepository.findByMemberNumber(id).get());
+        Member member = memberRepository.findByMemberNumber(id).get();
+        return MemberResponse.from(member, memberNoteRepository.countByMember_Id(member.getId()));
     }
 
     public MemberResponse createMember(MemberCreateRequest memberRequest) {
@@ -40,7 +56,7 @@ public class MemberService {
                 qrToken
         );
         return MemberResponse.from(
-                memberRepository.save(newMember)
+                memberRepository.save(newMember), 0L
         );
     }
 }

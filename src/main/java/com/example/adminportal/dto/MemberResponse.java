@@ -11,16 +11,20 @@ public record MemberResponse(
         String lastName,
         String email,
         Long memberNumber,
-        MemberStatus status
+        MemberStatus status,
+        boolean hasNotes,
+        long noteCount
 ) {
-    public static MemberResponse from(Member member) {
+    public static MemberResponse from(Member member, long noteCount) {
         return new MemberResponse(
                 member.getId(),
                 member.getFirstName(),
                 member.getLastName(),
                 member.getEmail(),
                 member.getMemberNumber(),
-                member.getStatus()
+                member.getStatus(),
+                noteCount > 0,
+                noteCount
         );
     }
 }

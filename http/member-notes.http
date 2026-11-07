@@ -1,0 +1,146 @@
+# Start the app, then choose Run All Requests in File in IntelliJ's HTTP Client.
+# Requires at least one existing ADMIN user (the development seed supplies one).
+# Each run creates a new test member and one note; these records remain in the database.
+@baseUrl = http://localhost:8080
+
+### 1. Select an existing admin as the note author
+< {%
+    ["notesAuthorId", "notesAuthorName", "notesMemberNumber", "notesCreatedNote"]
+        .forEach(key => client.global.clear(key));
+%}
+GET {{baseUrl}}/api/users
+Accept: application/json
+
+> {%
+    client.assert(response.status === 200, "Could not retrieve users");
+    const author = response.body.find(user => user.role === "ADMIN");
+    client.assert(author != null, "Create an ADMIN user before running this file");
+    client.global.set("notesAuthorId", author.id);
+    client.global.set("notesAuthorName", author.firstName);
+%}
+
+### 2. Create a fresh member to receive notes
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+
+{
+  "firstName": "Notes",
+  "lastName": "HTTP Test",
+  "email": "notes-{{$uuid}}@example.com"
+}
+
+> {%
+    client.test("New member has no notes", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.memberNumber != null, "Missing member number");
+        client.assert(response.body.hasNotes === false, "Expected hasNotes=false");
+        client.assert(response.body.noteCount === 0, "Expected noteCount=0");
+    });
+    client.assert(response.status === 201, "Member creation failed");
+    client.global.set("notesMemberNumber", String(response.body.memberNumber));
+%}
+
+### 3. Retrieve the member's initially empty notes page
+GET {{baseUrl}}/api/members/{{notesMemberNumber}}/notes
+Accept: application/json
+
+> {%
+    client.test("New member has an empty notes page", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.content.length === 0, "Expected no notes");
+        client.assert(response.body.totalElements === 0, "Expected totalElements=0");
+    });
+%}
+
+### 4. Create a note (member comes from the URL; timestamp is generated)
+POST {{baseUrl}}/api/members/{{notesMemberNumber}}/notes
+Content-Type: application/json
+
+{
+  "createdById": "{{notesAuthorId}}",
+  "content": "Member requested a follow-up. Created by the HTTP notes test."
+}
+
+> {%
+    client.test("Creates a note with its author and timestamp", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.id != null, "Missing note ID");
+        client.assert(response.body.content === "Member requested a follow-up. Created by the HTTP notes test.", "Wrong content");
+        client.assert(response.body.createdBy === client.global.get("notesAuthorName"), "Wrong author");
+        client.assert(Number.isFinite(Date.parse(response.body.createdAt)), "Missing or invalid timestamp");
+    });
+    client.assert(response.status === 201, "Note creation failed");
+    client.global.set("notesCreatedNote", JSON.stringify(response.body));
+%}
+
+### 5. Retrieve notes with explicit pagination and sorting
+GET {{baseUrl}}/api/members/{{notesMemberNumber}}/notes?page=0&size=20&sort=createdAt,desc
+Accept: application/json
+
+> {%
+    client.test("Retrieves the saved note with matching fields", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.totalElements === 1, "Expected exactly one note");
+        client.assert(response.body.content.length === 1, "Expected one note on this page");
+        const saved = JSON.parse(client.global.get("notesCreatedNote"));
+        const note = response.body.content.find(item => item.id === saved.id);
+        client.assert(note != null, "Created note was not returned");
+        ["id", "createdBy", "content", "createdAt"].forEach(key =>
+            client.assert(note[key] === saved[key], "Wrong field: " + key)
+        );
+    });
+%}
+
+### 6. Verify the member detail reflects the new note
+GET {{baseUrl}}/api/members/{{notesMemberNumber}}
+Accept: application/json
+
+> {%
+    client.test("Member detail reports one note", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.hasNotes === true, "Expected hasNotes=true");
+        client.assert(response.body.noteCount === 1, "Expected noteCount=1");
+    });
+%}
+
+### 7. Verify the member list also reflects the new note
+GET {{baseUrl}}/api/members
+Accept: application/json
+
+> {%
+    client.test("Member list reports one note", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        const member = response.body.find(item =>
+            String(item.memberNumber) === client.global.get("notesMemberNumber")
+        );
+        client.assert(member != null, "Test member missing from list");
+        client.assert(member.hasNotes === true, "Expected hasNotes=true");
+        client.assert(member.noteCount === 1, "Expected noteCount=1");
+    });
+%}
+
+### 8. Reject blank note content
+POST {{baseUrl}}/api/members/{{notesMemberNumber}}/notes
+Content-Type: application/json
+
+{
+  "createdById": "{{notesAuthorId}}",
+  "content": "   "
+}
+
+> {%
+    client.test("Blank content is rejected", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+    });
+%}
+
+### 9. Verify rejected creation did not insert a note
+GET {{baseUrl}}/api/members/{{notesMemberNumber}}/notes
+Accept: application/json
+
+> {%
+    client.test("Rejected note did not change the count", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.totalElements === 1, "Expected exactly one saved note");
+    });
+%}

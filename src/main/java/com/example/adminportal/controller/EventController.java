@@ -2,7 +2,6 @@ package com.example.adminportal.controller;
 
 import com.example.adminportal.dto.EventCreateRequest;
 import com.example.adminportal.dto.EventResponse;
-import com.example.adminportal.entity.Event;
 import com.example.adminportal.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
