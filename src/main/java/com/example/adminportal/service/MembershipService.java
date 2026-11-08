@@ -8,6 +8,8 @@ import com.example.adminportal.exception.MembershipAlreadyExistsException;
 import com.example.adminportal.repository.MemberRepository;
 import com.example.adminportal.repository.MembershipRepository;
 import jakarta.validation.Valid;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,18 +37,6 @@ public class MembershipService {
                         "Member not found."
                 ));
 
-        boolean hasExistingMembership = membershipRepository.existsByMember_MemberNumberAndProgramAndType(
-                request.memberId(),
-                request.membershipProgram(),
-                request.membershipType()
-        );
-
-        if (hasExistingMembership) {
-            throw new MembershipAlreadyExistsException(
-                    "This member already has a membership for this program."
-            );
-        }
-
         Membership newMembership = new Membership();
         newMembership.setMember(member);
         newMembership.setProgram(request.membershipProgram());
@@ -57,9 +47,30 @@ public class MembershipService {
         newMembership.setCreatedAt(Instant.now());
         newMembership.setCreatedBy(null); // TODO: once auth is in place, get authenticated user if exists
 
-        return MembershipResponse.from(membershipRepository.save(newMembership));
+        // Check for duplicate memberships using the index constraint on Memberships
+        try {
+            return MembershipResponse.from(membershipRepository.saveAndFlush(newMembership));
+        } catch (DataIntegrityViolationException ex) {
+            for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+                if (cause instanceof ConstraintViolationException violation) {
+                    String name = violation.getConstraintName();
+                    if (name != null) {
+                        name = name.split(" INDEX ", 2)[0];
+                    }
+
+                    if ("UQ_MEMBERSHIPS_MEMBER_PROGRAM_TYPE".equalsIgnoreCase(name)
+                            || "PUBLIC.UQ_MEMBERSHIPS_MEMBER_PROGRAM_TYPE".equalsIgnoreCase(name)) {
+                        throw new MembershipAlreadyExistsException(
+                                "This member already has a membership for this program and type."
+                        );
+                    }
+                }
+            }
+            throw ex;
+        }
     }
 
+    @Transactional
     public void ensureFreeMembership(Member member) {
         boolean exists = membershipRepository.existsByMember_MemberNumberAndProgramAndType(
                 member.getMemberNumber(),

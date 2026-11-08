@@ -10,7 +10,13 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 
 @Entity
-@Table(name = "memberships")
+@Table(
+        name = "memberships",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_memberships_member_program_type",
+                columnNames = {"member_id", "program", "type"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor
