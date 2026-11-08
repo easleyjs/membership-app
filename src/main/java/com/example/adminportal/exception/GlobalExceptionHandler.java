@@ -80,7 +80,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MembershipAlreadyExistsException.class)
     public ResponseEntity<ApiErrorResponse> handleMembershipAlreadyExists(
-            DuplicateCheckInException ex,
+            MembershipAlreadyExistsException ex,
             HttpServletRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
