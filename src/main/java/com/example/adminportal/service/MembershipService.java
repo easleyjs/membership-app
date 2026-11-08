@@ -74,7 +74,9 @@ public class MembershipService {
                     MembershipType.FREE,
                     MembershipStatus.ACTIVE,
                     Instant.now(),
-                    null
+                    null,
+                    null,
+                    Instant.now()
             );
             membershipRepository.save(membership);
         }
