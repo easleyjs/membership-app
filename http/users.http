@@ -33,3 +33,101 @@ Accept: application/json
 
     client.global.set("testAdminId", admin.id);
 %}
+
+# Run the status requests below in order against the dev app.
+# Each run creates a fresh member and STAFF account.
+
+### Status 1. Create a member for the status tests
+POST http://localhost:8080/api/members
+Content-Type: application/json
+
+{
+  "firstName": "User Status",
+  "lastName": "Test",
+  "email": "user-status-{{$uuid}}@example.com"
+}
+
+> {%
+    client.global.clear("statusTestMemberId");
+    client.global.clear("statusTestMemberNumber");
+    client.assert(response.status === 201, "Expected HTTP 201 for member creation");
+    client.assert(response.body.id != null, "Missing member ID");
+    client.assert(response.body.memberNumber != null, "Missing member number");
+    client.global.set("statusTestMemberId", response.body.id);
+    client.global.set("statusTestMemberNumber", String(response.body.memberNumber));
+%}
+
+### Status 2. Reject a status change for a member without an app user
+PATCH http://localhost:8080/api/users/{{statusTestMemberNumber}}/status
+Content-Type: application/json
+
+{
+  "enabled": false
+}
+
+> {%
+    client.test("A member without an app user returns 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "APP_USER_NOT_FOUND", "Wrong error code");
+    });
+%}
+
+### Status 3. Create the test app user
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{
+  "memberId": "{{statusTestMemberId}}",
+  "username": "status-test-{{$uuid}}",
+  "password": "dev-fixture-only",
+  "role": "STAFF"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201 for app user creation");
+%}
+
+### Status 4. Disable the app user
+PATCH http://localhost:8080/api/users/{{statusTestMemberNumber}}/status
+Content-Type: application/json
+
+{
+  "enabled": false
+}
+
+> {%
+    client.test("The app user can be disabled", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.enabled === false, "Expected enabled to be false");
+    });
+%}
+
+### Status 5. Re-enable the app user
+PATCH http://localhost:8080/api/users/{{statusTestMemberNumber}}/status
+Content-Type: application/json
+
+{
+  "enabled": true
+}
+
+> {%
+    client.test("The app user can be re-enabled", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.enabled === true, "Expected enabled to be true");
+    });
+%}
+
+### Status 6. Reject a request without enabled
+PATCH http://localhost:8080/api/users/{{statusTestMemberNumber}}/status
+Content-Type: application/json
+
+{}
+
+> {%
+    client.test("A missing enabled field returns 400", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("enabled:")),
+            "Expected a validation error for enabled");
+    });
+%}
