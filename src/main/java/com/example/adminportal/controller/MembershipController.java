@@ -27,7 +27,7 @@ public class MembershipController {
             @PathVariable Long memberNumber,
             @Valid @RequestBody MembershipCreateRequest request
     ) {
-        MembershipResponse createdMembership = membershipService.createMembership(request);
+        MembershipResponse createdMembership = membershipService.createMembership(memberNumber, request);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

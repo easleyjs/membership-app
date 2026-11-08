@@ -29,8 +29,8 @@ public class MembershipService {
     }
 
     @Transactional
-    public MembershipResponse createMembership(@Valid MembershipCreateRequest request) {
-        Member member = memberRepository.findByMemberNumber(request.memberId())
+    public MembershipResponse createMembership(Long memberNumber, @Valid MembershipCreateRequest request) {
+        Member member = memberRepository.findByMemberNumber(memberNumber)
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member not found."
                 ));
