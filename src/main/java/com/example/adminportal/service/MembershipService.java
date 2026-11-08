@@ -54,6 +54,8 @@ public class MembershipService {
         newMembership.setStatus(MembershipStatus.ACTIVE);
         newMembership.setValidFrom(request.validFrom());
         newMembership.setValidUntil(request.validUntil());
+        newMembership.setCreatedAt(Instant.now());
+        newMembership.setCreatedBy(null); // TODO: once auth is in place, get authenticated user if exists
 
         return MembershipResponse.from(membershipRepository.save(newMembership));
     }

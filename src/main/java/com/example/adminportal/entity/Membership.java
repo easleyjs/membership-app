@@ -58,7 +58,9 @@ public class Membership {
             MembershipType type,
             MembershipStatus status,
             Instant validFrom,
-            Instant validUntil
+            Instant validUntil,
+            AppUser createdBy,
+            Instant createdAt
     ) {
         this.member = member;
         this.program = program;
@@ -66,5 +68,7 @@ public class Membership {
         this.status = status;
         this.validFrom = validFrom;
         this.validUntil = validUntil;
+        this.createdBy = createdBy;
+        this.createdAt = createdAt;
     }
 }
