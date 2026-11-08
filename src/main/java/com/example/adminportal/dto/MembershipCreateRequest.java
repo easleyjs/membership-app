@@ -9,10 +9,8 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 
 public record MembershipCreateRequest(
-    @NotNull Long memberId,
     @NotNull MembershipProgram membershipProgram,
     @NotNull MembershipType membershipType,
-    @NotNull MembershipStatus status,
     @NotNull Instant validFrom,
     Instant validUntil
 ) {
