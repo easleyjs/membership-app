@@ -15,10 +15,12 @@ import java.util.stream.Collectors;
 public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberNoteRepository memberNoteRepository;
+    private final MembershipService membershipService;
 
-    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository) {
+    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository, MembershipService membershipService) {
         this.memberRepository = memberRepository;
         this.memberNoteRepository = memberNoteRepository;
+        this.membershipService = membershipService;
     }
 
     public List<MemberResponse> getAllMembers() {
@@ -55,6 +57,10 @@ public class MemberService {
                 memberNumber,
                 qrToken
         );
+
+        // Give the new member a free membership, if they don't already have one
+        membershipService.ensureFreeMembership(newMember);
+
         return MemberResponse.from(
                 memberRepository.save(newMember), 0L
         );
