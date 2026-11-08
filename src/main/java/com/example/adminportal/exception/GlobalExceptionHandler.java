@@ -79,7 +79,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MembershipAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleExistingDuplicateMembership(
+    public ResponseEntity<ApiErrorResponse> handleMembershipAlreadyExists(
             DuplicateCheckInException ex,
             HttpServletRequest request
     ) {
