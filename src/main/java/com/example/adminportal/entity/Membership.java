@@ -2,6 +2,7 @@ package com.example.adminportal.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -12,6 +13,7 @@ import java.time.Instant;
 @Table(name = "memberships")
 @Getter
 @Setter
+@NoArgsConstructor
 public class Membership {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,4 +51,20 @@ public class Membership {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    public Membership(
+            Member member,
+            MembershipProgram program,
+            MembershipType type,
+            MembershipStatus status,
+            Instant validFrom,
+            Instant validUntil
+    ) {
+        this.member = member;
+        this.program = program;
+        this.type = type;
+        this.status = status;
+        this.validFrom = validFrom;
+        this.validUntil = validUntil;
+    }
 }
