@@ -1,0 +1,151 @@
+# Start the app, then choose Run All Requests in File in IntelliJ's HTTP Client.
+# Each run creates a fresh member with FREE and PAID memberships that remain in the database.
+@baseUrl = http://localhost:8080
+@missingMemberNumber = 9223372036854775807
+@validFrom = 2026-01-01T00:00:00Z
+@validUntil = 2027-01-01T00:00:00Z
+
+### 1. Create a fresh member
+< {%
+    ["membershipsMemberNumber", "membershipsFreeId", "membershipsPaidId"]
+        .forEach(key => client.global.clear(key));
+%}
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+Accept: application/json
+
+{
+  "firstName": "Membership",
+  "lastName": "HTTP Test",
+  "email": "membership-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201 for member creation");
+    client.assert(response.body.memberNumber != null, "Missing member number");
+    client.global.set("membershipsMemberNumber", String(response.body.memberNumber));
+%}
+
+### 2. Verify the automatically created free membership
+GET {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships
+Accept: application/json
+
+> {%
+    client.test("A new member starts with one active OUTLAND FREE membership", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.totalElements === 1, "Expected one membership");
+        client.assert(response.body.content.length === 1, "Expected one item on the page");
+        const membership = response.body.content[0];
+        client.assert(membership.id != null, "Missing membership ID");
+        client.assert(membership.program === "OUTLAND", "Wrong program");
+        client.assert(membership.type === "FREE", "Wrong membership type");
+        client.assert(membership.status === "ACTIVE", "Wrong membership status");
+        client.global.set("membershipsFreeId", String(membership.id));
+    });
+%}
+
+### 3. Create a paid membership for the same member and program
+POST {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships
+Content-Type: application/json
+Accept: application/json
+
+{
+  "membershipProgram": "OUTLAND",
+  "membershipType": "PAID",
+  "validFrom": "{{validFrom}}",
+  "validUntil": "{{validUntil}}"
+}
+
+> {%
+    client.test("A different membership type can coexist with FREE", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        const membership = response.body;
+        client.assert(membership.id != null, "Missing membership ID");
+        client.assert(membership.program === "OUTLAND", "Wrong program");
+        client.assert(membership.type === "PAID", "Wrong membership type");
+        client.assert(membership.status === "ACTIVE", "Wrong membership status");
+        client.assert(Number.isFinite(Date.parse(membership.createdAt)), "Missing creation timestamp");
+        client.assert(Date.parse(membership.validFrom) === Date.parse("2026-01-01T00:00:00Z"), "Wrong start date");
+        client.assert(Date.parse(membership.validUntil) === Date.parse("2027-01-01T00:00:00Z"), "Wrong end date");
+        client.global.set("membershipsPaidId", String(membership.id));
+    });
+%}
+
+### 4. Reject a second paid membership for the same program
+POST {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships
+Content-Type: application/json
+Accept: application/json
+
+{
+  "membershipProgram": "OUTLAND",
+  "membershipType": "PAID",
+  "validFrom": "{{validFrom}}"
+}
+
+> {%
+    client.test("Duplicate membership returns a conflict", function () {
+        client.assert(response.status === 409, "Expected HTTP 409");
+        client.assert(response.body.code === "MEMBERSHIP_ALREADY_EXISTS", "Wrong error code");
+    });
+%}
+
+### 5. Reject a request missing the required start date
+POST {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships
+Content-Type: application/json
+Accept: application/json
+
+{
+  "membershipProgram": "OUTLAND",
+  "membershipType": "PAID"
+}
+
+> {%
+    client.test("Missing validFrom returns a validation error", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+    });
+%}
+
+### 6. Reject creation for an unknown member number
+POST {{baseUrl}}/api/members/{{missingMemberNumber}}/memberships
+Content-Type: application/json
+Accept: application/json
+
+{
+  "membershipProgram": "OUTLAND",
+  "membershipType": "PAID",
+  "validFrom": "{{validFrom}}"
+}
+
+> {%
+    client.test("Unknown member returns not found", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "MEMBER_NOT_FOUND", "Wrong error code");
+    });
+%}
+
+### 7. Check the first page after the rejected requests
+GET {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships?page=0&size=1
+Accept: application/json
+
+> {%
+    client.test("Only two memberships exist and the newest comes first", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.totalElements === 2, "Expected exactly two saved memberships");
+        client.assert(response.body.totalPages === 2, "Expected two pages");
+        client.assert(response.body.content.length === 1, "Expected one item on the first page");
+        client.assert(String(response.body.content[0].id) === client.global.get("membershipsPaidId"), "Expected PAID first");
+    });
+%}
+
+### 8. Check the second page
+GET {{baseUrl}}/api/members/{{membershipsMemberNumber}}/memberships?page=1&size=1
+Accept: application/json
+
+> {%
+    client.test("The second page contains the original free membership", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.content.length === 1, "Expected one item on the second page");
+        client.assert(String(response.body.content[0].id) === client.global.get("membershipsFreeId"), "Expected FREE second");
+    });
+%}
