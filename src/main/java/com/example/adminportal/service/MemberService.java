@@ -6,6 +6,7 @@ import com.example.adminportal.entity.Member;
 import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,10 +16,12 @@ import java.util.stream.Collectors;
 public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberNoteRepository memberNoteRepository;
+    private final MembershipService membershipService;
 
-    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository) {
+    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository, MembershipService membershipService) {
         this.memberRepository = memberRepository;
         this.memberNoteRepository = memberNoteRepository;
+        this.membershipService = membershipService;
     }
 
     public List<MemberResponse> getAllMembers() {
@@ -44,6 +47,7 @@ public class MemberService {
         return MemberResponse.from(member, memberNoteRepository.countByMember_Id(member.getId()));
     }
 
+    @Transactional
     public MemberResponse createMember(MemberCreateRequest memberRequest) {
         Long memberNumber = memberRepository.getNextMemberNumber();
         String qrToken = UUID.randomUUID().toString();
@@ -55,8 +59,14 @@ public class MemberService {
                 memberNumber,
                 qrToken
         );
+
+        Member savedMember = memberRepository.save(newMember);
+
+        // Give the new member a free membership, if they don't already have one
+        membershipService.ensureFreeMembership(newMember);
+
         return MemberResponse.from(
-                memberRepository.save(newMember), 0L
+                savedMember, 0
         );
     }
 }

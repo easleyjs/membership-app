@@ -78,6 +78,19 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(MembershipAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleMembershipAlreadyExists(
+            MembershipAlreadyExistsException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "MEMBERSHIP_ALREADY_EXISTS",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiErrorResponse> handleDuplicateEmail(
             DuplicateEmailException ex
