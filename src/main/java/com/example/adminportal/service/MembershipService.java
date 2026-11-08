@@ -7,13 +7,13 @@ import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.exception.MembershipAlreadyExistsException;
 import com.example.adminportal.repository.MemberRepository;
 import com.example.adminportal.repository.MembershipRepository;
-import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 
 @Service
 public class MembershipService {
@@ -35,7 +35,7 @@ public class MembershipService {
                         "Member not found."
                 ));
 
-        boolean hasExistingMembership = membershipRepository.existsByMember_IdAndProgramAndType(
+        boolean hasExistingMembership = membershipRepository.existsByMember_MemberNumberAndProgramAndType(
                 request.memberId(),
                 request.membershipProgram(),
                 request.membershipType()
@@ -59,7 +59,7 @@ public class MembershipService {
     }
 
     public void ensureFreeMembership(Member member) {
-        boolean exists = membershipRepository.existsByMember_IdAndProgramAndType(
+        boolean exists = membershipRepository.existsByMember_MemberNumberAndProgramAndType(
                 member.getMemberNumber(),
                 MembershipProgram.OUTLAND,
                 MembershipType.FREE
@@ -78,10 +78,9 @@ public class MembershipService {
         }
     }
 
-    public List<MembershipResponse> getAllMembershipsByMemberId(Long memberId) {
-                return membershipRepository.findByMember_Id(memberId)
-                        .stream()
-                        .map(MembershipResponse::from)
-                        .toList();
+    @Transactional(readOnly = true)
+    public Page<MembershipResponse> getAllMembershipsByMemberId(Long memberNumber, Pageable pageable) {
+        return membershipRepository.findByMember_MemberNumber(memberNumber, pageable)
+                .map(MembershipResponse::from);
     }
 }

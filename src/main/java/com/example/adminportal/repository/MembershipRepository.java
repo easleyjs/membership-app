@@ -4,19 +4,22 @@ import com.example.adminportal.entity.Membership;
 import com.example.adminportal.entity.MembershipProgram;
 import com.example.adminportal.entity.MembershipStatus;
 import com.example.adminportal.entity.MembershipType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface MembershipRepository extends JpaRepository<Membership, Long> {
-    List<Membership> findByMember_Id(Long memberId);
+    Page<Membership> findByMember_MemberNumber(Long memberNumber, Pageable pageable);
 
     List<Membership> findByMember_IdAndStatus(
-            Long memberId,
+            UUID memberId,
             MembershipStatus status
     );
 
-    boolean existsByMember_IdAndProgramAndType(
+    boolean existsByMember_MemberNumberAndProgramAndType(
             Long memberNumber,
             MembershipProgram program,
             MembershipType type
