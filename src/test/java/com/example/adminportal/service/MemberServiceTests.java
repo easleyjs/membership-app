@@ -15,7 +15,8 @@ import static org.mockito.Mockito.*;
 class MemberServiceTests {
     private final MemberRepository members = mock(MemberRepository.class);
     private final MemberNoteRepository notes = mock(MemberNoteRepository.class);
-    private final MemberService service = new MemberService(members, notes);
+    private final MembershipService membershipService = mock(MembershipService.class);
+    private final MemberService service = new MemberService(members, notes, membershipService);
 
     @Test
     void memberListIncludesCountsAndDefaultsMembersWithoutNotesToZero() {
