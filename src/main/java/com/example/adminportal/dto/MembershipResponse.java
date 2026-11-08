@@ -25,7 +25,9 @@ public record MembershipResponse(
                 membership.getType(),
                 membership.getStatus(),
                 membership.getCreatedAt(),
-                membership.getCreatedBy().getMember().getFirstName(),
+                membership.getCreatedBy() == null
+                        ? null
+                        : membership.getCreatedBy().getMember().getFirstName(),
                 membership.getValidFrom(),
                 membership.getValidUntil()
         );
