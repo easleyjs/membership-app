@@ -2,6 +2,8 @@ package com.example.adminportal.controller;
 
 import com.example.adminportal.dto.MemberCreateRequest;
 import com.example.adminportal.dto.MemberResponse;
+import com.example.adminportal.dto.MemberStatusRequest;
+import com.example.adminportal.dto.MemberStatusResponse;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.service.MemberService;
 import jakarta.validation.Valid;
@@ -40,6 +42,20 @@ public class MemberController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(createdMember);
+    }
+
+    @PutMapping("/{memberNumber}/ban")
+    public ResponseEntity<MemberStatusResponse> banMember(
+            @PathVariable Long memberNumber,
+            @Valid @RequestBody MemberStatusRequest request
+    ) {
+        return ResponseEntity.ok(memberService.banMember(memberNumber, request));
+    }
+
+    @PutMapping("/{memberNumber}/unban")
+    public ResponseEntity<MemberStatusResponse> unbanMember(
+            @PathVariable Long memberNumber) {
+        return ResponseEntity.ok(memberService.unbanMember(memberNumber));
     }
 
 }
