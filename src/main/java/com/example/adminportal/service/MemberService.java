@@ -2,11 +2,15 @@ package com.example.adminportal.service;
 
 import com.example.adminportal.dto.MemberCreateRequest;
 import com.example.adminportal.dto.MemberResponse;
+import com.example.adminportal.dto.MemberStatusResponse;
 import com.example.adminportal.entity.Member;
+import com.example.adminportal.entity.MemberStatus;
+import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PutMapping;
 
 import java.util.List;
 import java.util.UUID;
@@ -69,4 +73,27 @@ public class MemberService {
                 savedMember, 0
         );
     }
+
+    @Transactional
+    public MemberStatusResponse banMember(Long memberNumber) {
+        Member member = memberRepository.findByMemberNumber(memberNumber)
+                .orElseThrow(() -> new MemberNotFoundException(
+                        "Member: " + memberNumber + " not found."
+                ));
+        member.setStatus(MemberStatus.BANNED);
+
+        return MemberStatusResponse.from(member);
+    }
+
+    @Transactional
+    public MemberStatusResponse unbanMember(Long memberNumber) {
+        Member member = memberRepository.findByMemberNumber(memberNumber)
+                .orElseThrow(() -> new MemberNotFoundException(
+                        "Member: " + memberNumber + " not found."
+                ));
+        member.setStatus(MemberStatus.ACTIVE);
+
+        return MemberStatusResponse.from(member);
+    }
+
 }
