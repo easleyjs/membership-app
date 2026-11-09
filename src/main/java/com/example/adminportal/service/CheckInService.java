@@ -12,9 +12,7 @@ import com.example.adminportal.repository.CheckInRepository;
 import com.example.adminportal.repository.MemberRepository;
 import jakarta.transaction.Transactional;
 import jakarta.persistence.EntityManager;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.Duration;
@@ -57,72 +55,18 @@ public class CheckInService {
                         "Member not found: " + request.memberId()
                 ));
 
-        UUID staffId = request.staffMemberId();
-
         // Normalize timestamps to milliseconds for storage and comparison.
         Instant createdAt = request.createdAt().truncatedTo(ChronoUnit.MILLIS);
+        Instant receivedAt = Instant.now();
 
-        CheckIn existingCheckIn = checkInRepository.findById(request.id())
-                .orElse(null);
-
+        CheckIn existingCheckIn = validateExistingCheckIn(request, createdAt);
         if (existingCheckIn != null) {
-            boolean sameCheckIn =
-                    existingCheckIn.getMember().getId().equals(request.memberId())
-                            && existingCheckIn.getCheckedInBy().getId()
-                            .equals(request.staffMemberId())
-                            && existingCheckIn.getMethod() == request.method()
-                            && existingCheckIn.getCreatedAt().equals(createdAt);
-
-            if (!sameCheckIn) {
-                throw new CheckInConflictException(
-                        "Check-in ID already exists with different details"
-                );
-            }
-
             return CheckInResponse.from(existingCheckIn);
         }
 
-        if (member.getStatus() == MemberStatus.BANNED) {
-            throw new BannedMemberCheckInException(
-                    "Banned members cannot check in."
-            );
-        }
+        AppUser staff = findStaff(request.staffMemberId());
 
-        // Allow for offline sync check-ins
-        Instant receivedAt = Instant.now();
-
-        if (createdAt.isAfter(receivedAt.plus(MAX_FUTURE_SKEW))) {
-            throw new InvalidCheckInTimestampException(
-                    "Check-in time cannot be more than 5 minutes in the future"
-            );
-        }
-
-        if (createdAt.isBefore(receivedAt.minus(MAX_OFFLINE_AGE))) {
-            throw new InvalidCheckInTimestampException(
-                    "Check-in time cannot be more than 7 days old"
-            );
-        }
-
-        // Check for duplicates - same member, same timeframe <and same event, once added>
-        boolean duplicate =
-                checkInRepository
-                        .existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
-                                member.getId(),
-                                createdAt.minus(8, ChronoUnit.HOURS),
-                                createdAt.plus(8, ChronoUnit.HOURS)
-                        );
-
-        if (duplicate) {
-            throw new DuplicateCheckInException(
-                    "Member has already checked in within 8 hours of this check-in"
-            );
-        }
-
-        // TODO: Need to check whether staff member has access to do a check-in
-        AppUser staff = appUserRepository.findById(staffId)
-                .orElseThrow(() -> new AppUserNotFoundException(
-                        "App user not found: " + staffId
-                ));
+        validateCheckIn(member, createdAt, receivedAt);
 
         CheckIn checkIn = new CheckIn();
         checkIn.setId(request.id());
@@ -136,6 +80,79 @@ public class CheckInService {
         entityManager.flush();
 
         return CheckInResponse.from(checkIn);
+    }
+
+    private void validateCheckIn(Member member, Instant createdAt, Instant receivedAt) {
+        validateMemberStatus(member);
+        validateCheckInTime(createdAt, receivedAt);
+        validateDuplicateCheckIn(member.getId(), createdAt);
+    }
+
+    private CheckIn validateExistingCheckIn(CheckInCreateRequest request, Instant createdAt) {
+        CheckIn existingCheckIn = checkInRepository.findById(request.id())
+                .orElse(null);
+        if (existingCheckIn == null) {
+            return null;
+        }
+
+        boolean sameCheckIn =
+                existingCheckIn.getMember().getId().equals(request.memberId())
+                        && existingCheckIn.getCheckedInBy().getId().equals(request.staffMemberId())
+                        && existingCheckIn.getMethod() == request.method()
+                        && existingCheckIn.getCreatedAt().equals(createdAt);
+
+        if (!sameCheckIn) {
+            throw new CheckInConflictException(
+                    "Check-in ID already exists with different details"
+            );
+        }
+        return existingCheckIn;
+    }
+
+    private void validateMemberStatus(Member member) {
+        if (member.getStatus() == MemberStatus.BANNED) {
+            throw new BannedMemberCheckInException(
+                    "Banned members cannot check in."
+            );
+        }
+    }
+
+    private AppUser findStaff(UUID staffId) {
+        // TODO: Need to check whether staff member has access to do a check-in
+        return appUserRepository.findById(staffId)
+                .orElseThrow(() -> new AppUserNotFoundException(
+                        "App user not found: " + staffId
+                ));
+    }
+
+    private void validateDuplicateCheckIn(UUID memberId, Instant createdAt) {
+        boolean duplicate =
+                checkInRepository
+                        .existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
+                                memberId,
+                                createdAt.minus(8, ChronoUnit.HOURS),
+                                createdAt.plus(8, ChronoUnit.HOURS)
+                        );
+
+        if (duplicate) {
+            throw new DuplicateCheckInException(
+                    "Member has already checked in within 8 hours of this check-in"
+            );
+        }
+    }
+
+    private void validateCheckInTime(Instant createdAt, Instant receivedAt) {
+        if (createdAt.isAfter(receivedAt.plus(MAX_FUTURE_SKEW))) {
+            throw new InvalidCheckInTimestampException(
+                    "Check-in time cannot be more than 5 minutes in the future"
+            );
+        }
+
+        if (createdAt.isBefore(receivedAt.minus(MAX_OFFLINE_AGE))) {
+            throw new InvalidCheckInTimestampException(
+                    "Check-in time cannot be more than 7 days old"
+            );
+        }
     }
 
     public List<CheckInResponse> getCheckInsByMember(UUID memberId) {
