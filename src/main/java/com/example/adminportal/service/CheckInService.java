@@ -5,6 +5,7 @@ import com.example.adminportal.dto.CheckInResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.CheckIn;
 import com.example.adminportal.entity.Member;
+import com.example.adminportal.entity.MemberStatus;
 import com.example.adminportal.exception.*;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
@@ -79,6 +80,12 @@ public class CheckInService {
             }
 
             return CheckInResponse.from(existingCheckIn);
+        }
+
+        if (member.getStatus() == MemberStatus.BANNED) {
+            throw new BannedMemberCheckInException(
+                    "Banned members cannot check in."
+            );
         }
 
         // Allow for offline sync check-ins
