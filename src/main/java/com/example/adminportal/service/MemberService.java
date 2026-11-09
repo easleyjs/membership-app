@@ -79,7 +79,7 @@ public class MemberService {
     @Transactional
     public MemberStatusResponse banMember(
             Long memberNumber,
-            MemberStatusRequest request
+            String reason
     ) {
         Member member = memberRepository.findByMemberNumber(memberNumber)
                 .orElseThrow(() -> new MemberNotFoundException(
@@ -87,7 +87,7 @@ public class MemberService {
                 ));
         member.setStatus(MemberStatus.BANNED);
 
-        System.out.println(request.reason()); // replace with logging later
+        System.out.println(reason); // replace with logging later
 
         return MemberStatusResponse.from(member);
     }
@@ -98,7 +98,10 @@ public class MemberService {
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member: " + memberNumber + " not found."
                 ));
-        member.setStatus(MemberStatus.ACTIVE);
+
+        if (member.getStatus() == MemberStatus.BANNED) {
+            member.setStatus(MemberStatus.ACTIVE);
+        }
 
         return MemberStatusResponse.from(member);
     }
