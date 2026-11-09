@@ -2,6 +2,7 @@ package com.example.adminportal.service;
 
 import com.example.adminportal.dto.MemberCreateRequest;
 import com.example.adminportal.dto.MemberResponse;
+import com.example.adminportal.dto.MemberStatusRequest;
 import com.example.adminportal.dto.MemberStatusResponse;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.entity.MemberStatus;
@@ -74,13 +75,19 @@ public class MemberService {
         );
     }
 
+    // TODO: Add logging for ban + reason
     @Transactional
-    public MemberStatusResponse banMember(Long memberNumber) {
+    public MemberStatusResponse banMember(
+            Long memberNumber,
+            MemberStatusRequest request
+    ) {
         Member member = memberRepository.findByMemberNumber(memberNumber)
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member: " + memberNumber + " not found."
                 ));
         member.setStatus(MemberStatus.BANNED);
+
+        System.out.println(request.reason()); // replace with logging later
 
         return MemberStatusResponse.from(member);
     }
