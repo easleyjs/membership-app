@@ -1,0 +1,137 @@
+# Run these requests in order against the local dev app.
+# Each run creates a fresh member and uses the seeded dev admin for check-ins.
+
+### 1. Create a member for the ban tests
+POST http://localhost:8080/api/members
+Content-Type: application/json
+
+{
+  "firstName": "Member Ban",
+  "lastName": "Test",
+  "email": "member-ban-{{$uuid}}@example.com"
+}
+
+> {%
+    client.global.clear("banTestMemberNumber");
+    client.global.clear("banTestMemberId");
+    client.assert(response.status === 201, "Expected HTTP 201 for member creation");
+    client.assert(response.body.memberNumber != null, "Missing member number");
+    client.assert(response.body.id != null, "Missing member ID");
+    client.global.set("banTestMemberNumber", String(response.body.memberNumber));
+    client.global.set("banTestMemberId", response.body.id);
+%}
+
+### 2. Reject malformed JSON with a stable error response
+PUT http://localhost:8080/api/members/{{banTestMemberNumber}}/ban
+Content-Type: application/json
+
+{"reason": }
+
+> {%
+    client.test("Malformed ban JSON returns a safe HTTP 400 response", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "HTTP_MESSAGE_NOT_READABLE", "Wrong error code");
+        client.assert(response.body.message === "Request body could not be read.", "Wrong error message");
+        const expectedPath = "/api/members/" + client.global.get("banTestMemberNumber") + "/ban";
+        client.assert(response.body.path === expectedPath, "Wrong error path");
+    });
+%}
+
+### 3. Verify the malformed request did not ban the member
+GET http://localhost:8080/api/members/{{banTestMemberNumber}}
+Accept: application/json
+
+> {%
+    client.test("The member stays active after malformed JSON", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.status === "ACTIVE", "Expected the member to stay active");
+    });
+%}
+
+### 4. Ban the member without a request body
+PUT http://localhost:8080/api/members/{{banTestMemberNumber}}/ban
+Accept: application/json
+
+> {%
+    client.test("A ban request can omit the body", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.status === "BANNED", "Expected BANNED status");
+    });
+%}
+
+### 5. Find the seeded admin for check-ins
+GET http://localhost:8080/api/users
+Accept: application/json
+
+> {%
+    client.global.clear("banTestAdminId");
+    client.assert(response.status === 200, "User lookup failed");
+    const admin = response.body.find(user =>
+        user.firstName === "Josh" &&
+        user.lastName === "Test" &&
+        user.role === "ADMIN"
+    );
+    client.assert(admin != null && admin.id != null, "Seeded admin was not found");
+    client.global.set("banTestAdminId", admin.id);
+%}
+
+### 6. Reject a new check-in while the member is banned
+POST http://localhost:8080/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{banTestMemberId}}",
+  "staffMemberId": "{{banTestAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}"
+}
+
+> {%
+    client.test("A banned member cannot check in", function () {
+        client.assert(response.status === 403, "Expected HTTP 403");
+        client.assert(response.body.code === "BANNED_MEMBER_CHECKIN", "Wrong error code");
+    });
+%}
+
+### 7. Verify the rejected check-in was not saved
+GET http://localhost:8080/api/checkin/{{banTestMemberId}}
+Accept: application/json
+
+> {%
+    client.test("The banned member has no saved check-ins", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(Array.isArray(response.body), "Expected a check-in list");
+        client.assert(response.body.length === 0, "Expected no saved check-ins");
+    });
+%}
+
+### 8. Unban the test member
+PUT http://localhost:8080/api/members/{{banTestMemberNumber}}/unban
+Accept: application/json
+
+> {%
+    client.test("The test member can be unbanned", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(response.body.status === "ACTIVE", "Expected ACTIVE status");
+    });
+%}
+
+### 9. Allow a new check-in after unban
+POST http://localhost:8080/api/checkin
+Content-Type: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{banTestMemberId}}",
+  "staffMemberId": "{{banTestAdminId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}"
+}
+
+> {%
+    client.test("An unbanned member can check in", function () {
+        client.assert(response.status === 201, "Expected HTTP 201");
+        client.assert(response.body.memberId === client.global.get("banTestMemberId"), "Wrong member");
+    });
+%}
