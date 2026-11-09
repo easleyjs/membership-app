@@ -44,12 +44,14 @@ public class MemberController {
                 .body(createdMember);
     }
 
+    // TODO: Add auth (require admin?)
     @PutMapping("/{memberNumber}/ban")
     public ResponseEntity<MemberStatusResponse> banMember(
             @PathVariable Long memberNumber,
-            @Valid @RequestBody MemberStatusRequest request
+            @Valid @RequestBody(required = false) MemberStatusRequest request
     ) {
-        return ResponseEntity.ok(memberService.banMember(memberNumber, request));
+        String reason = request == null ? null : request.reason();
+        return ResponseEntity.ok(memberService.banMember(memberNumber, reason));
     }
 
     @PutMapping("/{memberNumber}/unban")
