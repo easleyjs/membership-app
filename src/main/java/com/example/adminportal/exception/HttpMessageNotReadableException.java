@@ -1,7 +1,7 @@
 package com.example.adminportal.exception;
 
-public class CheckInConflictException extends RuntimeException {
-    public CheckInConflictException(String message) {
+public class HttpMessageNotReadableException extends RuntimeException {
+    public HttpMessageNotReadableException(String message) {
         super(message);
     }
 }
