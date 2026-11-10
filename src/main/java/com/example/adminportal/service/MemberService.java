@@ -6,11 +6,9 @@ import com.example.adminportal.entity.MemberStatus;
 import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
-import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 import java.util.UUID;
@@ -46,8 +44,11 @@ public class MemberService {
                 .toList();
     }
 
-    public MemberResponse findMemberById(Long id) {
-        Member member = memberRepository.findByMemberNumber(id).get();
+    public MemberResponse findMemberById(Long memberNumber) {
+        Member member = memberRepository.findByMemberNumber(memberNumber)
+                .orElseThrow(() -> new MemberNotFoundException(
+                        "Member: " + memberNumber + " not found."
+                ));
         return MemberResponse.from(member, memberNoteRepository.countByMember_Id(member.getId()));
     }
 
