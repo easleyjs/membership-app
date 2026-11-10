@@ -11,5 +11,6 @@ public record CheckInCreateRequest(
         @NotNull UUID memberId,
         @NotNull UUID staffMemberId,
         @NotNull CheckInMethod method,
-        @NotNull Instant createdAt
+        @NotNull Instant createdAt,
+        Long eventId
 ) {}
