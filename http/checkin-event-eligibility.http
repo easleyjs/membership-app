@@ -1,0 +1,243 @@
+# Start the local dev app, then use Run All Requests in File in IntelliJ.
+# Uses the seeded admin and creates two members, three events, and check-in history in the dev database.
+@baseUrl = http://localhost:8080
+
+### 1. Find the seeded dev admin
+< {%
+    ["eligibilityStaffId","eligibilityFreeId","eligibilityPaidId","eligibilityPaidNumber"]
+        .concat(["eligibilityPaidEventId","eligibilityMembershipEventId","eligibilityOpenEventId","eligibilityOpenTime"])
+        .forEach(key => client.global.clear(key));
+%}
+GET {{baseUrl}}/api/users
+Accept: application/json
+
+> {%
+    client.assert(response.status === 200, "Expected HTTP 200");
+    const admin = response.body.find(user =>
+        user.firstName === "Josh" && user.lastName === "Test" && user.role === "ADMIN"
+    );
+    client.assert(admin != null && admin.id != null, "Seeded admin was not found");
+    client.global.set("eligibilityStaffId", admin.id);
+%}
+
+### 2. Create the free test member
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+Accept: application/json
+
+{
+  "firstName": "Free",
+  "lastName": "Eligibility Test",
+  "email": "eligibility-free-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.id != null && response.body.memberNumber != null, "Missing member identifiers");
+    client.global.set("eligibilityFreeId", response.body.id);
+%}
+
+### 3. Create the paid test member
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+Accept: application/json
+
+{
+  "firstName": "Paid",
+  "lastName": "Eligibility Test",
+  "email": "eligibility-paid-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.id != null && response.body.memberNumber != null, "Missing member identifiers");
+    client.global.set("eligibilityPaidId", response.body.id);
+    client.global.set("eligibilityPaidNumber", String(response.body.memberNumber));
+%}
+
+### 4. Give the paid test member an active paid membership
+POST {{baseUrl}}/api/members/{{eligibilityPaidNumber}}/memberships
+Content-Type: application/json
+Accept: application/json
+
+{
+  "membershipProgram": "OUTLAND",
+  "membershipType": "PAID",
+  "validFrom": "{{$isoTimestamp}}"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.type === "PAID" && response.body.status === "ACTIVE", "Expected an active paid membership");
+%}
+
+### 5. Create the membership and cover event
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Membership and cover eligibility {{$uuid}}",
+  "membershipRequired": true,
+  "coverRequired": true,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.id != null, "Missing event ID");
+    client.assert(response.body.membershipRequired === true && response.body.coverRequired === true, "Wrong event requirements");
+    client.global.set("eligibilityPaidEventId", String(response.body.id));
+%}
+
+### 6. Create the membership only event
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Membership only eligibility {{$uuid}}",
+  "membershipRequired": true,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.id != null, "Missing event ID");
+    client.assert(response.body.membershipRequired === true && response.body.coverRequired === false, "Wrong event requirements");
+    client.global.set("eligibilityMembershipEventId", String(response.body.id));
+%}
+
+### 7. Create the open event
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Open eligibility {{$uuid}}",
+  "membershipRequired": false,
+  "coverRequired": false,
+  "location": "OUTLAND"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.id != null, "Missing event ID");
+    client.assert(response.body.membershipRequired === false && response.body.coverRequired === false, "Wrong event requirements");
+    client.global.set("eligibilityOpenEventId", String(response.body.id));
+%}
+
+### 8. Reject a free member when membership and cover are required
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{eligibilityFreeId}}",
+  "staffMemberId": "{{eligibilityStaffId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}",
+  "eventId": {{eligibilityPaidEventId}}
+}
+
+> {%
+    client.assert(response.status === 403, "Expected HTTP 403");
+    client.assert(response.body.code === "CHECK_IN_MEMBERSHIP_REQUIRED", "Wrong error code");
+%}
+
+### 9. Accept a paid member when membership and cover are required
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{eligibilityPaidId}}",
+  "staffMemberId": "{{eligibilityStaffId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}",
+  "eventId": {{eligibilityPaidEventId}}
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.memberId === client.global.get("eligibilityPaidId"), "Wrong member");
+    client.assert(String(response.body.eventId) === client.global.get("eligibilityPaidEventId"), "Wrong event ID");
+%}
+
+### 10. Accept a free member when only membership is required
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{eligibilityFreeId}}",
+  "staffMemberId": "{{eligibilityStaffId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}",
+  "eventId": {{eligibilityMembershipEventId}}
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.memberId === client.global.get("eligibilityFreeId"), "Wrong member");
+    client.assert(String(response.body.eventId) === client.global.get("eligibilityMembershipEventId"), "Wrong event ID");
+%}
+
+### 11. Accept a check-in for an event with neither requirement
+< {%
+    // Space this check-in 24 hours from the other one for the same member.
+    client.global.set("eligibilityOpenTime", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+%}
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{eligibilityFreeId}}",
+  "staffMemberId": "{{eligibilityStaffId}}",
+  "method": "MANUAL",
+  "createdAt": "{{eligibilityOpenTime}}",
+  "eventId": {{eligibilityOpenEventId}}
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    client.assert(response.body.memberId === client.global.get("eligibilityFreeId"), "Wrong member");
+    client.assert(String(response.body.eventId) === client.global.get("eligibilityOpenEventId"), "Wrong event ID");
+%}
+
+### 12. Reject an unknown event
+POST {{baseUrl}}/api/checkin
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id": "{{$uuid}}",
+  "memberId": "{{eligibilityFreeId}}",
+  "staffMemberId": "{{eligibilityStaffId}}",
+  "method": "MANUAL",
+  "createdAt": "{{$isoTimestamp}}",
+  "eventId": -1
+}
+
+> {%
+    client.assert(response.status === 404, "Expected HTTP 404");
+    client.assert(response.body.code === "NOT FOUND", "Wrong error code");
+%}
+
+### 13. Verify the free member's history contains only the two accepted check-ins
+GET {{baseUrl}}/api/checkin/{{eligibilityFreeId}}
+Accept: application/json
+
+> {%
+    client.assert(response.status === 200, "Expected HTTP 200");
+    client.assert(Array.isArray(response.body) && response.body.length === 2, "Expected exactly two saved check-ins");
+    const eventIds = response.body.map(checkIn => String(checkIn.eventId));
+    client.assert(eventIds.includes(client.global.get("eligibilityMembershipEventId")), "Missing membership-only event check-in");
+    client.assert(eventIds.includes(client.global.get("eligibilityOpenEventId")), "Missing open event check-in");
+%}

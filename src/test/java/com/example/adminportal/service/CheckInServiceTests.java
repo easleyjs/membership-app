@@ -5,23 +5,35 @@ import com.example.adminportal.dto.CheckInResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.CheckIn;
 import com.example.adminportal.entity.CheckInMethod;
+import com.example.adminportal.entity.Event;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.entity.MemberStatus;
+import com.example.adminportal.entity.Membership;
+import com.example.adminportal.entity.MembershipStatus;
+import com.example.adminportal.entity.MembershipType;
 import com.example.adminportal.exception.AppUserNotFoundException;
 import com.example.adminportal.exception.BannedMemberCheckInException;
 import com.example.adminportal.exception.CheckInConflictException;
+import com.example.adminportal.exception.CheckInMembershipRequiredException;
 import com.example.adminportal.exception.DuplicateCheckInException;
 import com.example.adminportal.exception.InvalidCheckInTimestampException;
 import com.example.adminportal.exception.MemberNotFoundException;
+import com.example.adminportal.exception.ResourceNotFoundException;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
+import com.example.adminportal.repository.EventRepository;
 import com.example.adminportal.repository.MemberRepository;
+import com.example.adminportal.repository.MembershipRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,8 +50,12 @@ class CheckInServiceTests {
     private final MemberRepository members = mock(MemberRepository.class);
     private final AppUserRepository users = mock(AppUserRepository.class);
     private final EntityManager entityManager = mock(EntityManager.class);
-    private final CheckInService service = new CheckInService(checkIns, members, users, entityManager);
+    private final EventRepository events = mock(EventRepository.class);
+    private final MembershipRepository memberships = mock(MembershipRepository.class);
+    private final CheckInService service = new CheckInService(checkIns, members, users, entityManager,
+            events, memberships);
 
+    private static final Long EVENT_ID = 42L;
     private final UUID checkInId = UUID.randomUUID();
     private final UUID memberId = UUID.randomUUID();
     private final UUID staffId = UUID.randomUUID();
@@ -60,7 +76,7 @@ class CheckInServiceTests {
         Instant createdAt = Instant.parse("2020-01-01T12:00:00Z");
         stubExistingCheckIn(createdAt);
         CheckInCreateRequest request = new CheckInCreateRequest(
-                checkInId, memberId, staffId, CheckInMethod.QR_SCAN, createdAt);
+                checkInId, memberId, staffId, CheckInMethod.QR_SCAN, createdAt, null);
 
         assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request));
         verifyNoInteractions(users, entityManager);
@@ -141,11 +157,91 @@ class CheckInServiceTests {
         assertSame(member, persisted.getValue().getMember());
         assertSame(staff, persisted.getValue().getCheckedInBy());
         assertEquals(new CheckInResponse(checkInId, memberId, staffId, normalizedCreatedAt,
-                CheckInMethod.MANUAL), response);
+                CheckInMethod.MANUAL, null), response);
+        verifyNoInteractions(events, memberships);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, PAID", "false, FREE", "false, PAID"})
+    void qualifyingActiveMembershipAllowsCheckIn(boolean coverRequired, MembershipType type) {
+        stubEvent(true, coverRequired);
+        Membership active = new Membership();
+        active.setType(type);
+        active.setStatus(MembershipStatus.ACTIVE);
+        when(memberships.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE))
+                .thenReturn(List.of(active));
+
+        assertEquals(EVENT_ID, service.createCheckIn(eventRequest()).eventId());
+        verify(entityManager).flush();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void membershipRequiredEventRejectsMemberWithoutActiveMembership(boolean coverRequired) {
+        stubEvent(true, coverRequired);
+        CheckInCreateRequest request = eventRequest();
+
+        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request));
+        verify(memberships).findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE);
+        verifyNoInteractions(entityManager);
+    }
+
+    @Test
+    void activeFreeMembershipIsInsufficientWhenMembershipAndCoverAreRequired() {
+        stubEvent(true, true);
+        Membership free = new Membership();
+        free.setType(MembershipType.FREE);
+        free.setStatus(MembershipStatus.ACTIVE);
+        when(memberships.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE))
+                .thenReturn(List.of(free));
+        CheckInCreateRequest request = eventRequest();
+
+        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request));
+        verifyNoInteractions(entityManager);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void eventWithoutMembershipRequirementSkipsMembershipLookup(boolean coverRequired) {
+        stubEvent(false, coverRequired);
+
+        assertEquals(EVENT_ID, service.createCheckIn(eventRequest()).eventId());
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void unknownEventIsRejected() {
+        stubNewCheckIn(MemberStatus.ACTIVE);
+        CheckInCreateRequest request = eventRequest();
+
+        assertThrows(ResourceNotFoundException.class, () -> service.createCheckIn(request));
+        verifyNoInteractions(memberships, entityManager);
+    }
+
+    @Test
+    void retryWithDifferentEventIsRejected() {
+        CheckInCreateRequest request = eventRequest();
+        stubExistingCheckIn(request.createdAt().truncatedTo(ChronoUnit.MILLIS)).setEventId(43L);
+
+        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request));
+        verifyNoInteractions(events, memberships, entityManager);
+    }
+
+    private void stubEvent(boolean membershipRequired, boolean coverRequired) {
+        stubNewCheckIn(MemberStatus.ACTIVE);
+        Event event = new Event();
+        event.setMembershipRequired(membershipRequired);
+        event.setCoverRequired(coverRequired);
+        when(events.findById(EVENT_ID)).thenReturn(Optional.of(event));
+    }
+
+    private CheckInCreateRequest eventRequest() {
+        return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL,
+                Instant.now(), EVENT_ID);
     }
 
     private CheckInCreateRequest requestAt(Instant createdAt) {
-        return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL, createdAt);
+        return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL, createdAt, null);
     }
 
     private void stubNewCheckIn(MemberStatus status) {
