@@ -4,12 +4,17 @@ import com.example.adminportal.dto.CheckInCreateRequest;
 import com.example.adminportal.dto.CheckInResponse;
 import com.example.adminportal.entity.AppUser;
 import com.example.adminportal.entity.CheckIn;
+import com.example.adminportal.entity.Event;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.entity.MemberStatus;
+import com.example.adminportal.entity.MembershipStatus;
+import com.example.adminportal.entity.MembershipType;
 import com.example.adminportal.exception.*;
 import com.example.adminportal.repository.AppUserRepository;
 import com.example.adminportal.repository.CheckInRepository;
+import com.example.adminportal.repository.EventRepository;
 import com.example.adminportal.repository.MemberRepository;
+import com.example.adminportal.repository.MembershipRepository;
 import jakarta.transaction.Transactional;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
@@ -18,6 +23,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -26,6 +32,8 @@ public class CheckInService {
     MemberRepository memberRepository;
     AppUserRepository appUserRepository;
     EntityManager entityManager;
+    private final EventRepository eventRepository;
+    private final MembershipRepository membershipRepository;
 
     // How far in the future can a check-in creation timestamp be
     private static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(5);
@@ -36,12 +44,16 @@ public class CheckInService {
             CheckInRepository checkInRepository,
             MemberRepository memberRepository,
             AppUserRepository appUserRepository,
-            EntityManager entityManager
+            EntityManager entityManager,
+            EventRepository eventRepository,
+            MembershipRepository membershipRepository
     ) {
         this.checkInRepository = checkInRepository;
         this.memberRepository = memberRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
+        this.eventRepository = eventRepository;
+        this.membershipRepository = membershipRepository;
     }
 
     //Perform a check-in
@@ -66,10 +78,11 @@ public class CheckInService {
 
         AppUser staff = findStaff(request.staffMemberId());
 
-        validateCheckIn(member, createdAt, receivedAt);
+        validateCheckIn(member, request.eventId(), createdAt, receivedAt);
 
         CheckIn checkIn = new CheckIn();
         checkIn.setId(request.id());
+        checkIn.setEventId(request.eventId());
         checkIn.setMember(member);
         checkIn.setCheckedInBy(staff);
         checkIn.setMethod(request.method());
@@ -82,10 +95,31 @@ public class CheckInService {
         return CheckInResponse.from(checkIn);
     }
 
-    private void validateCheckIn(Member member, Instant createdAt, Instant receivedAt) {
+    private void validateCheckIn(Member member, Long eventId, Instant createdAt, Instant receivedAt) {
         validateMemberStatus(member);
         validateCheckInTime(createdAt, receivedAt);
+        if (eventId != null) {
+            Event event = eventRepository.findById(eventId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
+            validateMembershipEligibility(member.getId(), event);
+        }
         validateDuplicateCheckIn(member.getId(), createdAt);
+    }
+
+    private void validateMembershipEligibility(UUID memberId, Event event) {
+        if (!event.isMembershipRequired()) {
+            return;
+        }
+
+        boolean paidRequired = event.isCoverRequired();
+        boolean eligible = membershipRepository.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE)
+                .stream()
+                .anyMatch(membership -> !paidRequired || membership.getType() == MembershipType.PAID);
+        if (!eligible) {
+            throw new CheckInMembershipRequiredException(paidRequired
+                    ? "An active paid membership is required for this event."
+                    : "An active membership is required for this event.");
+        }
     }
 
     private CheckIn validateExistingCheckIn(CheckInCreateRequest request, Instant createdAt) {
@@ -99,7 +133,8 @@ public class CheckInService {
                 existingCheckIn.getMember().getId().equals(request.memberId())
                         && existingCheckIn.getCheckedInBy().getId().equals(request.staffMemberId())
                         && existingCheckIn.getMethod() == request.method()
-                        && existingCheckIn.getCreatedAt().equals(createdAt);
+                        && existingCheckIn.getCreatedAt().equals(createdAt)
+                        && Objects.equals(existingCheckIn.getEventId(), request.eventId());
 
         if (!sameCheckIn) {
             throw new CheckInConflictException(
