@@ -1,17 +1,16 @@
 package com.example.adminportal.service;
 
-import com.example.adminportal.dto.MemberCreateRequest;
-import com.example.adminportal.dto.MemberResponse;
-import com.example.adminportal.dto.MemberStatusRequest;
-import com.example.adminportal.dto.MemberStatusResponse;
+import com.example.adminportal.dto.*;
 import com.example.adminportal.entity.Member;
 import com.example.adminportal.entity.MemberStatus;
 import com.example.adminportal.exception.MemberNotFoundException;
 import com.example.adminportal.repository.MemberNoteRepository;
 import com.example.adminportal.repository.MemberRepository;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 import java.util.UUID;
@@ -73,6 +72,22 @@ public class MemberService {
         return MemberResponse.from(
                 savedMember, 0
         );
+    }
+
+    @Transactional
+    public MemberUpdateResponse updateMember(
+            Long memberNumber,
+            MemberUpdateRequest request
+    ) {
+        Member member = memberRepository.findByMemberNumber(memberNumber)
+                .orElseThrow(() -> new MemberNotFoundException(
+                        "Member: " + memberNumber + " not found."
+                ));
+        member.setFirstName(request.firstName());
+        member.setLastName(request.lastName());
+        member.setEmail(request.email());
+
+        return MemberUpdateResponse.from(member);
     }
 
     // TODO: Add logging for ban + reason
