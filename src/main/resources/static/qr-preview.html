@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Member QR Preview</title>
+</head>
+<body>
+    <main>
+        <h1>Member QR Preview</h1>
+        <form id="preview-form">
+            <label for="member-number">Member number</label>
+            <input id="member-number" type="text" inputmode="numeric" pattern="[0-9]+" required>
+            <button type="submit">Show QR code</button>
+        </form>
+        <p id="preview-status" role="status"></p>
+        <img id="qr-preview" width="240" height="240" alt="Member QR code" hidden>
+    </main>
+    <script>
+        const form = document.getElementById('preview-form');
+        const memberNumber = document.getElementById('member-number');
+        const status = document.getElementById('preview-status');
+        const preview = document.getElementById('qr-preview');
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            preview.hidden = true;
+            status.textContent = 'Loading QR code…';
+            preview.src = `/api/dev/members/${encodeURIComponent(memberNumber.value)}/qr.png`;
+        });
+
+        preview.addEventListener('load', () => {
+            preview.hidden = false;
+            status.textContent = 'QR code loaded.';
+        });
+
+        preview.addEventListener('error', () => {
+            preview.hidden = true;
+            status.textContent = 'Could not load the QR code. Check the member number and make sure the dev profile is active.';
+        });
+    </script>
+</body>
+</html>
