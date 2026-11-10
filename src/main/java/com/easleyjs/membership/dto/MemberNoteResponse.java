@@ -1,7 +1,7 @@
 package com.easleyjs.membership.dto;
 
 import com.easleyjs.membership.entity.MemberNote;
-import com.example.adminportal.entity.*;
+import com.easleyjs.membership.entity.*;
 
 import java.time.Instant;
 

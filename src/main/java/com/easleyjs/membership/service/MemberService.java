@@ -1,7 +1,7 @@
 package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.dto.*;
-import com.example.adminportal.dto.*;
+import com.easleyjs.membership.dto.*;
 import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.exception.MemberNotFoundException;

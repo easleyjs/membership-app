@@ -10,7 +10,7 @@ import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.entity.MembershipStatus;
 import com.easleyjs.membership.entity.MembershipType;
 import com.easleyjs.membership.exception.*;
-import com.example.adminportal.exception.*;
+import com.easleyjs.membership.exception.*;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.CheckInRepository;
 import com.easleyjs.membership.repository.EventRepository;

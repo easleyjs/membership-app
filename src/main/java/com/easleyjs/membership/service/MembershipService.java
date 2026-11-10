@@ -3,7 +3,7 @@ package com.easleyjs.membership.service;
 import com.easleyjs.membership.dto.MembershipCreateRequest;
 import com.easleyjs.membership.dto.MembershipResponse;
 import com.easleyjs.membership.entity.*;
-import com.example.adminportal.entity.*;
+import com.easleyjs.membership.entity.*;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.exception.MembershipAlreadyExistsException;
 import com.easleyjs.membership.repository.MemberRepository;

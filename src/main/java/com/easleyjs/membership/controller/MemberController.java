@@ -1,7 +1,7 @@
 package com.easleyjs.membership.controller;
 
 import com.easleyjs.membership.dto.*;
-import com.example.adminportal.dto.*;
+import com.easleyjs.membership.dto.*;
 import com.easleyjs.membership.service.MemberService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;

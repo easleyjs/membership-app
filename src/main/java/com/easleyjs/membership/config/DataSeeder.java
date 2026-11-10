@@ -2,7 +2,7 @@ package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.dto.MemberCreateRequest;
 import com.easleyjs.membership.entity.*;
-import com.example.adminportal.entity.*;
+import com.easleyjs.membership.entity.*;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.repository.MemberRepository;
