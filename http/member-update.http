@@ -1,0 +1,117 @@
+# Start the local dev app and use Run All Requests in File.
+# Each run creates one test member with a unique email and leaves it in the dev database.
+@baseUrl = http://localhost:8080
+
+### 1. Create a member to update
+< {%
+    client.global.clear("memberUpdateOriginal");
+    client.global.clear("memberUpdateNumber");
+    client.global.clear("memberUpdateEmail");
+%}
+POST {{baseUrl}}/api/members
+Content-Type: application/json
+
+{
+  "firstName": "Original",
+  "lastName": "Member",
+  "email": "member-update-{{$uuid}}@example.com"
+}
+
+> {%
+    client.assert(response.status === 201, "Expected HTTP 201");
+    const member = response.body;
+    client.assert(member.id != null && member.memberNumber != null, "Missing member identifiers");
+    client.global.set("memberUpdateOriginal", JSON.stringify(member));
+    client.global.set("memberUpdateNumber", String(member.memberNumber));
+    client.global.set("memberUpdateEmail", "updated-" + member.email);
+%}
+
+### 2. Update the member's name and email
+PUT {{baseUrl}}/api/members/{{memberUpdateNumber}}/update
+Content-Type: application/json
+
+{
+  "firstName": "Updated",
+  "lastName": "Profile",
+  "email": "{{memberUpdateEmail}}"
+}
+
+> {%
+    client.test("Updates all three fields on the existing member", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        client.assert(String(response.body.memberNumber) === client.global.get("memberUpdateNumber"), "Wrong member number");
+        client.assert(response.body.firstName === "Updated", "Wrong first name");
+        client.assert(response.body.lastName === "Profile", "Wrong last name");
+        client.assert(response.body.email === client.global.get("memberUpdateEmail"), "Wrong email");
+    });
+%}
+
+### 3. Reject blank or missing names
+PUT {{baseUrl}}/api/members/{{memberUpdateNumber}}/update
+Content-Type: application/json
+
+{
+  "firstName": " ",
+  "email": "{{memberUpdateEmail}}"
+}
+
+> {%
+    client.test("Rejects a blank first name and a missing last name", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("firstName:")), "Missing first name error");
+        client.assert(response.body.details.some(detail => detail.startsWith("lastName:")), "Missing last name error");
+    });
+%}
+
+### 4. Reject an invalid email
+PUT {{baseUrl}}/api/members/{{memberUpdateNumber}}/update
+Content-Type: application/json
+
+{
+  "firstName": "Rejected",
+  "lastName": "Update",
+  "email": "not-an-email"
+}
+
+> {%
+    client.test("Rejects an invalid email", function () {
+        client.assert(response.status === 400, "Expected HTTP 400");
+        client.assert(response.body.code === "VALIDATION_ERROR", "Wrong error code");
+        client.assert(response.body.details.some(detail => detail.startsWith("email:")), "Missing email error");
+    });
+%}
+
+### 5. Verify the valid update persisted and rejected updates changed nothing
+GET {{baseUrl}}/api/members/{{memberUpdateNumber}}
+Accept: application/json
+
+> {%
+    client.test("The saved member has the accepted values and original identity", function () {
+        client.assert(response.status === 200, "Expected HTTP 200");
+        const original = JSON.parse(client.global.get("memberUpdateOriginal"));
+        client.assert(response.body.id === original.id, "Member ID changed");
+        client.assert(response.body.memberNumber === original.memberNumber, "Member number changed");
+        client.assert(response.body.status === original.status, "Member status changed");
+        client.assert(response.body.firstName === "Updated", "Wrong saved first name");
+        client.assert(response.body.lastName === "Profile", "Wrong saved last name");
+        client.assert(response.body.email === client.global.get("memberUpdateEmail"), "Wrong saved email");
+    });
+%}
+
+### 6. Reject an update for a nonexistent member
+PUT {{baseUrl}}/api/members/-1/update
+Content-Type: application/json
+
+{
+  "firstName": "Unknown",
+  "lastName": "Member",
+  "email": "missing-member-{{$uuid}}@example.com"
+}
+
+> {%
+    client.test("An unknown member number returns HTTP 404", function () {
+        client.assert(response.status === 404, "Expected HTTP 404");
+        client.assert(response.body.code === "MEMBER_NOT_FOUND", "Wrong error code");
+    });
+%}
