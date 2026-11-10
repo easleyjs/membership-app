@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MemberRepository extends JpaRepository<Member, UUID> {
-    @Query(value = "SELECT NEXT VALUE FOR member_number_seq", nativeQuery = true)
+    @Query(value = "SELECT nextval('member_number_seq')", nativeQuery = true)
     Long getNextMemberNumber();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
