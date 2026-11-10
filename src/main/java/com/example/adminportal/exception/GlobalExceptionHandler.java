@@ -193,6 +193,19 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(CheckInMembershipRequiredException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckInMembershipRequired(
+            CheckInMembershipRequiredException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(
+                        "CHECK_IN_MEMBERSHIP_REQUIRED",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
     @ExceptionHandler(BannedMemberCheckInException.class)
     public ResponseEntity<ApiErrorResponse> handleBannedMemberCheckin(
             BannedMemberCheckInException ex,
