@@ -15,10 +15,9 @@ public class CheckIn {
     @Id
     UUID id;
 
-    /*
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    private Event event;
-     */
+    // Keep the original event ID in check-in history even if the event is deleted.
+    @Column(updatable = false)
+    private Long eventId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     private Member member;
