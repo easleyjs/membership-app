@@ -1,0 +1,242 @@
+package com.easleyjs.membership.exception;
+
+import com.easleyjs.membership.dto.ApiErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.nio.file.AccessDeniedException;
+import java.time.Instant;
+import java.util.List;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiErrorResponse.of(
+                        "HTTP_MESSAGE_NOT_READABLE",
+                        "Request body could not be read.",
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler({ResourceNotFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiErrorResponse> handleNotFound(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of(
+                        "NOT FOUND",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(MemberNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleMemberNotFound(
+            MemberNotFoundException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        "MEMBER_NOT_FOUND",
+                        ex.getMessage(),
+                        List.of(),
+                        "",
+                        Instant.now()
+                ));
+    }
+
+    @ExceptionHandler(AppUserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleAppUserNotFound(
+            AppUserNotFoundException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        "APP_USER_NOT_FOUND",
+                        ex.getMessage(),
+                        List.of(),
+                        "",
+                        Instant.now()
+                ));
+    }
+
+    @ExceptionHandler(MemberAlreadyHasUserException.class)
+    public ResponseEntity<ApiErrorResponse> handleMemberAlreadyHasUser(
+            MemberAlreadyHasUserException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "MEMBER_ALREADY_HAS_USER",
+                        ex.getMessage(),
+                        List.of(),
+                        "",
+                        Instant.now()
+                ));
+    }
+
+    @ExceptionHandler(MembershipAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleMembershipAlreadyExists(
+            MembershipAlreadyExistsException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "MEMBERSHIP_ALREADY_EXISTS",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(DuplicateEmailException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateEmail(
+            DuplicateEmailException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "DUPLICATE_EMAIL",
+                        ex.getMessage(),
+                        List.of(),
+                        "",
+                        Instant.now()
+                ));
+    }
+
+    @ExceptionHandler(CheckInConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckInConflict(
+            CheckInConflictException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "CHECK_IN_CONFLICT",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(DuplicateCheckInException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateCheckIn(
+            DuplicateCheckInException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(
+                        "DUPLICATE_CHECK_IN",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(InvalidCheckInTimestampException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCheckInTimestamp(
+            InvalidCheckInTimestampException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        "INVALID_CHECK_IN_TIMESTAMP",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(
+                    "ACCESS_DENIED",
+                    "You do not have permission to access this resource",
+                    request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiErrorResponse> handleValidation(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request
+    ) {
+        List<String> details = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .toList();
+
+        return ResponseEntity
+                .badRequest()
+                .body(ApiErrorResponse.of(
+                        "VALIDATION_ERROR",
+                        "Request validation failed.",
+                        details,
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(CheckInMembershipRequiredException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckInMembershipRequired(
+            CheckInMembershipRequiredException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(
+                        "CHECK_IN_MEMBERSHIP_REQUIRED",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(BannedMemberCheckInException.class)
+    public ResponseEntity<ApiErrorResponse> handleBannedMemberCheckin(
+            BannedMemberCheckInException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(
+                        "BANNED_MEMBER_CHECKIN",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleException(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+
+        log.error("Unhandled exception at {}", request.getRequestURI(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiErrorResponse.of(
+                        "INTERNAL_SERVER_ERROR",
+                        "An unexpected error occurred",
+                        request.getRequestURI()
+                ));
+    }
+
+
+
+}
