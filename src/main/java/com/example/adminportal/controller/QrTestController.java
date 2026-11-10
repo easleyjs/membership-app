@@ -14,8 +14,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Profile("dev")
 public class QrTestController {
-    MemberRepository memberRepository;
-    QrCodeService qrCodeService;
+    private final MemberRepository memberRepository;
+    private final QrCodeService qrCodeService;
+
+    public QrTestController(MemberRepository memberRepository, QrCodeService qrCodeService) {
+        this.memberRepository = memberRepository;
+        this.qrCodeService = qrCodeService;
+    }
 
     @GetMapping(
             value = "/api/dev/members/{memberNumber}/qr.png",
