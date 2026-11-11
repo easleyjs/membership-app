@@ -13,6 +13,7 @@ target/
 build/
 
 # Environment / secrets
+dev.env
 .env
 .env.*
 !.env.example
