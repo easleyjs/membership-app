@@ -9,6 +9,7 @@ import com.easleyjs.membership.exception.MemberAlreadyHasUserException;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.repository.MemberRepository;
 import com.easleyjs.membership.repository.AppUserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,13 +19,16 @@ import java.util.UUID;
 public class AppUserService {
     private AppUserRepository appUserRepo;
     private MemberRepository memberRepo;
+    private PasswordEncoder passwordEncoder;
 
     public AppUserService(
             AppUserRepository appUserRepo,
-            MemberRepository memberRepo
+            MemberRepository memberRepo,
+            PasswordEncoder passwordEncoder
     ) {
         this.appUserRepo = appUserRepo;
         this.memberRepo = memberRepo;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public List<AppUserResponse> getAllAppUsers() {
@@ -54,7 +58,7 @@ public class AppUserService {
 
         AppUser appUser = new AppUser(
                 member,
-                request.password(), //passwordEncoder.encode(request.password()),
+                passwordEncoder.encode(request.password()),
                 request.role()
         );
 
