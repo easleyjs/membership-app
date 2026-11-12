@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@Profile("dev")
+@Profile({"dev", "local"})
 public class QrTestController {
     private final MemberRepository memberRepository;
     private final QrCodeService qrCodeService;
