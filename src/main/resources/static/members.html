@@ -6,13 +6,15 @@
 <title>Admin Portal · Admin</title>
 <link rel="stylesheet" href="css/members.css">
 </head>
-<body>
+<body class="session-pending">
+
+  <p id="sessionStatus" role="status">Restoring your session…</p>
 
   <header class="header">
     <div class="header-top">
       <h1>Admin<span class="count" id="count"></span></h1>
       <div class="user-menu">
-        <button class="user-avatar" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">JD</button>
+        <button class="user-avatar" id="userMenuBtn" aria-haspopup="true" aria-expanded="false"></button>
         <div class="user-dropdown" id="userDropdown">
           <button class="user-dropdown-item" id="profileBtn">Profile</button>
           <button class="user-dropdown-item" id="switchModeBtn">Switch to Door</button>

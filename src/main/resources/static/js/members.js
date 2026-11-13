@@ -46,7 +46,7 @@ window.App = window.App || {};
   let searchTerm = "";
   let pageSize = 10;
   let currentPage = 1;
-  let mode = "admin"; // "door" | "admin" — TEMP: defaulted to admin for testing; flip back to "door" before shipping
+  let mode = "door";
 
   // Door view — GET /api/members returns:
   //   { memberNumber: <int>, firstName, lastName, status: "ACTIVE" | "INACTIVE", email }
@@ -414,9 +414,14 @@ window.App = window.App || {};
       closeUserMenu();
     });
 
-    logoutBtn.addEventListener("click", () => {
-      closeUserMenu();
-      App.auth.logout();
+    logoutBtn.addEventListener("click", async () => {
+      logoutBtn.disabled = true;
+      try {
+        await App.auth.logout();
+      } catch (err) {
+        alert(`Couldn't sign out: ${err.message}`);
+        logoutBtn.disabled = false;
+      }
     });
 
     switchModeBtn.addEventListener("click", () => {
@@ -500,9 +505,27 @@ window.App = window.App || {};
     });
   }
 
-  function init() {
+  async function init() {
+    const status = document.getElementById("sessionStatus");
+    let user;
+    try {
+      user = await App.auth.restoreSession();
+    } catch (err) {
+      if (err.status === 401) {
+        window.location.replace("login.html");
+      } else {
+        status.textContent = `Couldn't restore your session: ${err.message} Reload the page to retry.`;
+      }
+      return;
+    }
+
+    const userMenuBtn = document.getElementById("userMenuBtn");
+    userMenuBtn.textContent = initials(user.displayName);
+    userMenuBtn.setAttribute("aria-label", user.displayName);
+    status.hidden = true;
+    document.body.classList.remove("session-pending");
     bindEvents();
-    setMode(mode);
+    setMode(App.auth.isAdmin() ? "admin" : "door");
   }
 
   window.App.members = { init, openDetail, closeDetail, setMode, loadData };

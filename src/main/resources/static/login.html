@@ -9,15 +9,15 @@
 <body>
 
   <div class="card">
-    <h1>Admin sign in</h1>
+    <h1>Sign in</h1>
     <p class="sub">Enter your credentials to access the control panel.</p>
 
-    <div class="error" id="errorMsg">Incorrect username or password.</div>
+    <div class="error" id="errorMsg" role="alert"></div>
 
-    <form id="loginForm" autocomplete="on">
+    <form id="loginForm" method="post" action="/api/auth/login" autocomplete="on">
       <div class="field">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" placeholder="e.g. jsmith" autocomplete="username" required>
+        <label for="username">Email</label>
+        <input type="email" id="username" name="username" placeholder="name@example.com" autocomplete="username" required>
       </div>
 
       <div class="field">
@@ -25,18 +25,11 @@
         <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
       </div>
 
-      <div class="row-between">
-        <label class="remember">
-          <input type="checkbox" id="remember" name="remember">
-          Keep me signed in
-        </label>
-      </div>
-
       <button type="submit">Sign in</button>
     </form>
 
     <div class="forgot-wrap">
-      <a href="#">Forgot username / password?</a>
+      <a href="#">Forgot email or password?</a>
     </div>
   </div>
 
@@ -48,7 +41,7 @@
     const passwordInput = document.getElementById('password');
 
     function showLoginError(message){
-      errorMsg.textContent = message || 'Incorrect username or password.';
+      errorMsg.textContent = message || 'Incorrect email or password.';
       errorMsg.classList.add('visible', 'shake');
       // restart the shake animation if it's already showing
       errorMsg.addEventListener('animationend', () => {
@@ -66,12 +59,16 @@
 
     document.getElementById('loginForm').addEventListener('submit', async function(e){
       e.preventDefault();
+      const submit = this.querySelector('button[type="submit"]');
+      if (submit.disabled) return;
+      submit.disabled = true;
 
       try {
         await App.auth.login(usernameInput.value, passwordInput.value);
-        window.location.href = 'members.html';
+        window.location.replace('members.html');
       } catch (err) {
         showLoginError(err.message);
+        submit.disabled = false;
       }
     });
   </script>

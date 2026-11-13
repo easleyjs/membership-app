@@ -1,8 +1,7 @@
 /* api.js
  * All fetch() calls live here, plus one shared error type/handler.
  * Every other file talks to the backend through App.api — nothing else
- * should call fetch() directly. Point API_BASE at your real backend and
- * these are ready to go as-is.
+ * should call fetch() directly.
  */
 window.App = window.App || {};
 
@@ -18,19 +17,25 @@ window.App = window.App || {};
     }
   }
 
-  // Shared request wrapper: handles JSON encode/decode, credentials,
-  // and turns both network failures and non-2xx responses into ApiError.
-  async function request(path, options = {}) {
+  async function request(path, { method = "GET", body } = {}) {
+    const headers = {};
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      // Fetch a fresh token since Spring clears it on login and logout.
+      const csrf = await request("/auth/csrf");
+      headers[csrf.headerName] = csrf.token;
+    }
+    if (body !== undefined && !(body instanceof URLSearchParams)) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(body);
+    }
+
     let res;
     try {
       res = await fetch(API_BASE + path, {
-        credentials: "include",
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        credentials: "same-origin",
+        method,
+        headers,
+        body,
       });
     } catch (err) {
       throw new ApiError("Network error — check your connection and try again.", 0);
@@ -58,8 +63,11 @@ window.App = window.App || {};
     ApiError,
 
     // --- Auth ---
-    login(username, password) {
-      return request("/auth/login", { method: "POST", body: { username, password } });
+    login(email, password) {
+      return request("/auth/login", {
+        method: "POST",
+        body: new URLSearchParams({ username: email, password }),
+      });
     },
     logout() {
       return request("/auth/logout", { method: "POST" });
