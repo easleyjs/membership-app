@@ -30,7 +30,7 @@ public class SecurityConfig {
         return http
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/login.html", "/css/**", "/js/**", "/api/auth/csrf").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/login.html", "/css/**", "/js/**", "/api/auth/csrf", "/images/**").permitAll()
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .requestCache(AbstractHttpConfigurer::disable)
