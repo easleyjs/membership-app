@@ -4,28 +4,33 @@ import com.easleyjs.membership.dto.EventCreateRequest;
 import com.easleyjs.membership.dto.EventResponse;
 import com.easleyjs.membership.entity.Event;
 import com.easleyjs.membership.entity.EventStatus;
+import com.easleyjs.membership.exception.AppUserNotFoundException;
 import com.easleyjs.membership.exception.ResourceNotFoundException;
+import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import jakarta.validation.Valid;
-import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Validated
 public class EventService {
-    EventRepository eventRepository;
+    private final EventRepository eventRepository;
+    private final AppUserRepository appUserRepository;
 
-    public EventService(
-            EventRepository eventRepository
-    ) {
+    public EventService(EventRepository eventRepository, AppUserRepository appUserRepository) {
         this.eventRepository = eventRepository;
+        this.appUserRepository = appUserRepository;
     }
 
     @Transactional
-    public EventResponse createEvent(@Valid EventCreateRequest request) {
+    public EventResponse createEvent(@Valid EventCreateRequest request, UUID creatorId) {
+        var creator = appUserRepository.findById(creatorId)
+                .orElseThrow(() -> new AppUserNotFoundException("Event creator account not found"));
         Event newEvent = new Event();
 
         newEvent.setName(request.name());
@@ -35,12 +40,14 @@ public class EventService {
         newEvent.setCoverRequired(request.coverRequired());
         newEvent.setLocation(request.location());
         newEvent.setStatus(EventStatus.ACTIVE);
+        newEvent.setCreatedBy(creator);
 
         Event savedEvent = eventRepository.save(newEvent);
 
         return EventResponse.from(savedEvent);
     }
 
+    @Transactional(readOnly = true)
     public EventResponse getEvent(Long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -50,6 +57,7 @@ public class EventService {
         return EventResponse.from(event);
     }
 
+    @Transactional(readOnly = true)
     public List<EventResponse> getAllEvents() {
         return eventRepository.findAll()
                 .stream()

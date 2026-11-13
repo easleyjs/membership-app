@@ -2,7 +2,6 @@ package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.dto.MemberCreateRequest;
 import com.easleyjs.membership.entity.*;
-import com.easleyjs.membership.entity.*;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.repository.MemberRepository;
@@ -11,6 +10,9 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -21,7 +23,9 @@ public class DataSeeder {
     CommandLineRunner seedMembers(
             MemberRepository memberRepo,
             MemberService memberService,
-            AppUserRepository appUserRepo
+            AppUserRepository appUserRepo,
+            PasswordEncoder passwordEncoder,
+            Environment environment
     ) {
         return args -> {
             if (memberRepo.count() == 0) {
@@ -35,22 +39,26 @@ public class DataSeeder {
                         new MemberCreateRequest("Douglas", "McCarthy", "control@nitzer-ebb.com"),
                         new MemberCreateRequest("Ronny", "Moorings", "medusa@clanofxymox.com"),
                         new MemberCreateRequest("Sascha", "Konietzko", "ultraheavybeat@kmfdm.com"),
-                        new MemberCreateRequest("Dave", "Gahan", "violator@depechemode.com"),
-                        new MemberCreateRequest("Josh", "Test", "josh@example.com")
+                        new MemberCreateRequest("Dave", "Gahan", "violator@depechemode.com")
                 );
                 members.forEach(memberService::createMember);
             }
 
-            Member testMember = memberRepo.findMemberByEmailContainsIgnoreCase("josh@example.com");
+            String adminEmail = "josh@example.com";
+            if (appUserRepo.findByMember_Email(adminEmail).isPresent()) {
+                return;
+            }
 
-            AppUser user = new AppUser(
-                    testMember,
-                    "password",
-                    UserRole.ADMIN
-            );
+            String rawPassword = environment.getProperty("DEV_ADMIN_PASSWORD");
+            if (!StringUtils.hasText(rawPassword)) {
+                throw new IllegalStateException("Set DEV_ADMIN_PASSWORD to create the dev admin account");
+            }
 
-            appUserRepo.save(user);
-
+            Member adminMember = memberRepo.findByEmail(adminEmail).orElseGet(() -> {
+                var createdMember = memberService.createMember(new MemberCreateRequest("Josh", "Test", adminEmail));
+                return memberRepo.findById(createdMember.id()).orElseThrow();
+            });
+            appUserRepo.save(new AppUser(adminMember, passwordEncoder.encode(rawPassword), UserRole.ADMIN));
         };
     }
     @Bean
