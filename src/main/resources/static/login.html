@@ -8,30 +8,34 @@
 </head>
 <body>
 
-  <div class="card">
-    <h1>Sign in</h1>
-    <p class="sub">Enter your credentials to access the control panel.</p>
+  <main class="login-layout">
+    <img class="organization-logo" src="images/outland.svg" alt="Outland" width="887" height="391">
 
-    <div class="error" id="errorMsg" role="alert"></div>
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="sub">Enter your credentials</p>
 
-    <form id="loginForm" method="post" action="/api/auth/login" autocomplete="on">
-      <div class="field">
-        <label for="username">Email</label>
-        <input type="email" id="username" name="username" placeholder="name@example.com" autocomplete="username" required>
+      <div class="error" id="errorMsg" role="alert"></div>
+
+      <form id="loginForm" method="post" action="/api/auth/login" autocomplete="on">
+        <div class="field">
+          <label for="username">Email</label>
+          <input type="email" id="username" name="username" placeholder="name@example.com" autocomplete="username" required>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+
+        <button type="submit">Sign in</button>
+      </form>
+
+      <div class="forgot-wrap">
+        <a href="#">Forgot email or password?</a>
       </div>
-
-      <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
-      </div>
-
-      <button type="submit">Sign in</button>
-    </form>
-
-    <div class="forgot-wrap">
-      <a href="#">Forgot email or password?</a>
     </div>
-  </div>
+  </main>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
