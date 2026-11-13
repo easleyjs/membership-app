@@ -1,13 +1,19 @@
 package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.controller.AuthController;
+import com.easleyjs.membership.controller.CheckInController;
 import com.easleyjs.membership.controller.EventController;
+import com.easleyjs.membership.dto.CheckInCreateRequest;
+import com.easleyjs.membership.dto.CheckInResponse;
+import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
+import com.easleyjs.membership.entity.CheckInMethod;
 import com.easleyjs.membership.entity.Event;
 import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
+import com.easleyjs.membership.service.CheckInService;
 import com.easleyjs.membership.service.EventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +23,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,7 +43,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AuthController.class, EventController.class})
+@WebMvcTest({AuthController.class, CheckInController.class, EventController.class})
 @Import({SecurityConfig.class, UserDetailsConfig.class, EventService.class})
 class SessionSecurityTests {
     private static final String EMAIL = "staff@example.com";
@@ -46,6 +54,7 @@ class SessionSecurityTests {
     @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean AppUserRepository users;
     @MockitoBean EventRepository events;
+    @MockitoBean CheckInService checkIns;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -140,6 +149,48 @@ class SessionSecurityTests {
         var savedEvent = ArgumentCaptor.forClass(Event.class);
         verify(events).save(savedEvent.capture());
         assertThat(savedEvent.getValue().getCreatedBy()).isSameAs(account);
+    }
+
+    @Test
+    void membershipOverrideUsesSignedInAccountAndReturnsAdmissionType() throws Exception {
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+
+        UUID checkInId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
+        var request = new CheckInCreateRequest(checkInId, memberId, null, CheckInMethod.QR_SCAN,
+                createdAt, 42L, true);
+        when(checkIns.createCheckIn(request, userId)).thenReturn(new CheckInResponse(checkInId,
+                memberId, userId, createdAt, CheckInMethod.QR_SCAN, 42L, AdmissionType.MEMBERSHIP_OVERRIDE));
+
+        Csrf checkInCsrf = csrf(session);
+        mvc.perform(post("/api/checkin").session(session)
+                        .header(checkInCsrf.headerName(), checkInCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "id": "%s",
+                                  "memberId": "%s",
+                                  "createdAt": "%s",
+                                  "eventId": 42,
+                                  "method": "QR_SCAN",
+                                  "overrideMembership": true
+                                }
+                                """.formatted(checkInId, memberId, createdAt)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.checkedInById").value(userId.toString()))
+                .andExpect(jsonPath("$.admissionType").value("MEMBERSHIP_OVERRIDE"));
+
+        when(checkIns.createCheckIn(request, userId)).thenThrow(new AccessDeniedException("Access denied."));
+        mvc.perform(post("/api/checkin").session(session)
+                        .header(checkInCsrf.headerName(), checkInCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     private MockHttpServletRequestBuilder login(MockHttpSession session, String password) {

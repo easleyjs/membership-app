@@ -159,11 +159,8 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiErrorResponse> handleAccessDenied(
-            AccessDeniedException ex,
-            HttpServletRequest request
-    ) {
+    @ExceptionHandler({AccessDeniedException.class, org.springframework.security.access.AccessDeniedException.class})
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(HttpServletRequest request) {
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(

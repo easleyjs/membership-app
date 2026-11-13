@@ -2,6 +2,7 @@ package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.dto.CheckInCreateRequest;
 import com.easleyjs.membership.dto.CheckInResponse;
+import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
 import com.easleyjs.membership.entity.CheckIn;
 import com.easleyjs.membership.entity.Event;
@@ -9,7 +10,7 @@ import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.entity.MembershipStatus;
 import com.easleyjs.membership.entity.MembershipType;
-import com.easleyjs.membership.exception.*;
+import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.exception.*;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.CheckInRepository;
@@ -18,6 +19,7 @@ import com.easleyjs.membership.repository.MemberRepository;
 import com.easleyjs.membership.repository.MembershipRepository;
 import jakarta.transaction.Transactional;
 import jakarta.persistence.EntityManager;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -60,8 +62,10 @@ public class CheckInService {
     //Perform a check-in
     @Transactional
     public CheckInResponse createCheckIn(
-            CheckInCreateRequest request
+            CheckInCreateRequest request,
+            UUID authenticatedStaffId
     ) {
+        AppUser staff = findStaff(authenticatedStaffId, request.staffMemberId());
 
         Member member = memberRepository.findByIdForUpdate(request.memberId())
                 .orElseThrow(() -> new MemberNotFoundException(
@@ -72,14 +76,14 @@ public class CheckInService {
         Instant createdAt = request.createdAt().truncatedTo(ChronoUnit.MILLIS);
         Instant receivedAt = Instant.now();
 
-        CheckIn existingCheckIn = validateExistingCheckIn(request, createdAt);
+        CheckIn existingCheckIn = validateExistingCheckIn(request, authenticatedStaffId, createdAt);
         if (existingCheckIn != null) {
             return CheckInResponse.from(existingCheckIn);
         }
 
-        AppUser staff = findStaff(request.staffMemberId());
-
-        validateCheckIn(member, request.eventId(), createdAt, receivedAt);
+        boolean overrideMembership = request.requestsMembershipOverride();
+        AdmissionType admissionType = validateCheckIn(member, request.eventId(), createdAt, receivedAt,
+                overrideMembership);
 
         CheckIn checkIn = new CheckIn();
         checkIn.setId(request.id());
@@ -87,6 +91,8 @@ public class CheckInService {
         checkIn.setMember(member);
         checkIn.setCheckedInBy(staff);
         checkIn.setMethod(request.method());
+        checkIn.setAdmissionType(admissionType);
+        checkIn.setMembershipOverrideRequested(overrideMembership);
         checkIn.setCreatedAt(createdAt);
         checkIn.setReceivedAt(receivedAt);
 
@@ -96,34 +102,41 @@ public class CheckInService {
         return CheckInResponse.from(checkIn);
     }
 
-    private void validateCheckIn(Member member, Long eventId, Instant createdAt, Instant receivedAt) {
+    private AdmissionType validateCheckIn(Member member, Long eventId, Instant createdAt, Instant receivedAt,
+                                          boolean overrideMembership) {
         validateMemberStatus(member);
         validateCheckInTime(createdAt, receivedAt);
+        AdmissionType admissionType = AdmissionType.STANDARD;
         if (eventId != null) {
             Event event = eventRepository.findById(eventId)
                     .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
-            validateMembershipEligibility(member.getId(), event);
+            admissionType = determineAdmissionType(member.getId(), event, overrideMembership);
         }
         validateDuplicateCheckIn(member.getId(), createdAt);
+        return admissionType;
     }
 
-    private void validateMembershipEligibility(UUID memberId, Event event) {
+    private AdmissionType determineAdmissionType(UUID memberId, Event event, boolean overrideMembership) {
         if (!event.isMembershipRequired()) {
-            return;
+            return AdmissionType.STANDARD;
         }
 
         boolean paidRequired = event.isCoverRequired();
         boolean eligible = membershipRepository.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE)
                 .stream()
                 .anyMatch(membership -> !paidRequired || membership.getType() == MembershipType.PAID);
-        if (!eligible) {
-            throw new CheckInMembershipRequiredException(paidRequired
-                    ? "An active paid membership is required for this event."
-                    : "An active membership is required for this event.");
+        if (eligible) {
+            return AdmissionType.STANDARD;
         }
+        if (overrideMembership) {
+            return AdmissionType.MEMBERSHIP_OVERRIDE;
+        }
+        throw new CheckInMembershipRequiredException(paidRequired
+                ? "An active paid membership is required for this event."
+                : "An active membership is required for this event.");
     }
 
-    private CheckIn validateExistingCheckIn(CheckInCreateRequest request, Instant createdAt) {
+    private CheckIn validateExistingCheckIn(CheckInCreateRequest request, UUID staffId, Instant createdAt) {
         CheckIn existingCheckIn = checkInRepository.findById(request.id())
                 .orElse(null);
         if (existingCheckIn == null) {
@@ -132,8 +145,9 @@ public class CheckInService {
 
         boolean sameCheckIn =
                 existingCheckIn.getMember().getId().equals(request.memberId())
-                        && existingCheckIn.getCheckedInBy().getId().equals(request.staffMemberId())
+                        && existingCheckIn.getCheckedInBy().getId().equals(staffId)
                         && existingCheckIn.getMethod() == request.method()
+                        && existingCheckIn.isMembershipOverrideRequested() == request.requestsMembershipOverride()
                         && existingCheckIn.getCreatedAt().equals(createdAt)
                         && Objects.equals(existingCheckIn.getEventId(), request.eventId());
 
@@ -153,12 +167,14 @@ public class CheckInService {
         }
     }
 
-    private AppUser findStaff(UUID staffId) {
-        // TODO: Need to check whether staff member has access to do a check-in
-        return appUserRepository.findById(staffId)
-                .orElseThrow(() -> new AppUserNotFoundException(
-                        "App user not found: " + staffId
-                ));
+    private AppUser findStaff(UUID authenticatedStaffId, UUID requestedStaffId) {
+        if (requestedStaffId != null && !requestedStaffId.equals(authenticatedStaffId)) {
+            throw new AccessDeniedException("Check-ins must use the signed-in staff account.");
+        }
+        return appUserRepository.findById(authenticatedStaffId)
+                .filter(AppUser::isEnabled)
+                .filter(user -> user.getRole() == UserRole.STAFF || user.getRole() == UserRole.ADMIN)
+                .orElseThrow(() -> new AccessDeniedException("An enabled staff account is required."));
     }
 
     private void validateDuplicateCheckIn(UUID memberId, Instant createdAt) {

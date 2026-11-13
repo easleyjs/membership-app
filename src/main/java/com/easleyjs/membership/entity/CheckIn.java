@@ -35,4 +35,12 @@ public class CheckIn {
     @Column(nullable = false)
     private CheckInMethod method;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private AdmissionType admissionType = AdmissionType.STANDARD;
+
+    // Keep the original request intent for idempotent retries.
+    @Column(nullable = false, updatable = false)
+    private boolean membershipOverrideRequested;
+
 }

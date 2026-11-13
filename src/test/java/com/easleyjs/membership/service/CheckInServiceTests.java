@@ -2,6 +2,7 @@ package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.dto.CheckInCreateRequest;
 import com.easleyjs.membership.dto.CheckInResponse;
+import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
 import com.easleyjs.membership.entity.CheckIn;
 import com.easleyjs.membership.entity.CheckInMethod;
@@ -11,7 +12,7 @@ import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.entity.Membership;
 import com.easleyjs.membership.entity.MembershipStatus;
 import com.easleyjs.membership.entity.MembershipType;
-import com.easleyjs.membership.exception.AppUserNotFoundException;
+import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.exception.BannedMemberCheckInException;
 import com.easleyjs.membership.exception.CheckInConflictException;
 import com.easleyjs.membership.exception.CheckInMembershipRequiredException;
@@ -30,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -67,8 +69,8 @@ class CheckInServiceTests {
         Instant createdAt = Instant.parse("2020-01-01T12:00:00.123456Z");
         CheckIn existing = stubExistingCheckIn(createdAt.truncatedTo(ChronoUnit.MILLIS));
 
-        assertEquals(CheckInResponse.from(existing), service.createCheckIn(requestAt(createdAt)));
-        verifyNoInteractions(users, entityManager);
+        assertEquals(CheckInResponse.from(existing), service.createCheckIn(requestAt(createdAt), staffId));
+        verifyNoInteractions(entityManager);
     }
 
     @Test
@@ -76,10 +78,10 @@ class CheckInServiceTests {
         Instant createdAt = Instant.parse("2020-01-01T12:00:00Z");
         stubExistingCheckIn(createdAt);
         CheckInCreateRequest request = new CheckInCreateRequest(
-                checkInId, memberId, staffId, CheckInMethod.QR_SCAN, createdAt, null);
+                checkInId, memberId, staffId, CheckInMethod.QR_SCAN, createdAt, null, null);
 
-        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request));
-        verifyNoInteractions(users, entityManager);
+        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request, staffId));
+        verifyNoInteractions(entityManager);
     }
 
     @Test
@@ -87,7 +89,7 @@ class CheckInServiceTests {
         stubNewCheckIn(MemberStatus.BANNED);
         CheckInCreateRequest request = requestAt(Instant.now());
 
-        assertThrows(BannedMemberCheckInException.class, () -> service.createCheckIn(request));
+        assertThrows(BannedMemberCheckInException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(entityManager);
     }
 
@@ -97,7 +99,7 @@ class CheckInServiceTests {
         CheckInCreateRequest request = requestAt(Instant.now().plus(6, ChronoUnit.MINUTES));
 
         InvalidCheckInTimestampException exception = assertThrows(
-                InvalidCheckInTimestampException.class, () -> service.createCheckIn(request));
+                InvalidCheckInTimestampException.class, () -> service.createCheckIn(request, staffId));
         assertEquals("Check-in time cannot be more than 5 minutes in the future", exception.getMessage());
         verifyNoInteractions(entityManager);
     }
@@ -108,7 +110,7 @@ class CheckInServiceTests {
         CheckInCreateRequest request = requestAt(Instant.now().minus(8, ChronoUnit.DAYS));
 
         InvalidCheckInTimestampException exception = assertThrows(
-                InvalidCheckInTimestampException.class, () -> service.createCheckIn(request));
+                InvalidCheckInTimestampException.class, () -> service.createCheckIn(request, staffId));
         assertEquals("Check-in time cannot be more than 7 days old", exception.getMessage());
         verifyNoInteractions(entityManager);
     }
@@ -122,15 +124,16 @@ class CheckInServiceTests {
                 memberId, createdAt.minus(8, ChronoUnit.HOURS), createdAt.plus(8, ChronoUnit.HOURS)))
                 .thenReturn(true);
 
-        assertThrows(DuplicateCheckInException.class, () -> service.createCheckIn(request));
+        assertThrows(DuplicateCheckInException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(entityManager);
     }
 
     @Test
     void unknownMemberIsRejected() {
+        stubStaff();
         CheckInCreateRequest request = requestAt(Instant.now());
 
-        assertThrows(MemberNotFoundException.class, () -> service.createCheckIn(request));
+        assertThrows(MemberNotFoundException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(entityManager);
     }
 
@@ -139,7 +142,7 @@ class CheckInServiceTests {
         when(members.findByIdForUpdate(memberId)).thenReturn(Optional.of(member));
         CheckInCreateRequest request = requestAt(Instant.now());
 
-        assertThrows(AppUserNotFoundException.class, () -> service.createCheckIn(request));
+        assertThrows(AccessDeniedException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(entityManager);
     }
 
@@ -149,7 +152,7 @@ class CheckInServiceTests {
         Instant createdAt = Instant.now().minus(6, ChronoUnit.DAYS);
         Instant normalizedCreatedAt = createdAt.truncatedTo(ChronoUnit.MILLIS);
 
-        CheckInResponse response = service.createCheckIn(requestAt(createdAt));
+        CheckInResponse response = service.createCheckIn(requestAt(createdAt), staffId);
 
         ArgumentCaptor<CheckIn> persisted = ArgumentCaptor.forClass(CheckIn.class);
         verify(entityManager).persist(persisted.capture());
@@ -157,7 +160,7 @@ class CheckInServiceTests {
         assertSame(member, persisted.getValue().getMember());
         assertSame(staff, persisted.getValue().getCheckedInBy());
         assertEquals(new CheckInResponse(checkInId, memberId, staffId, normalizedCreatedAt,
-                CheckInMethod.MANUAL, null), response);
+                CheckInMethod.MANUAL, null, AdmissionType.STANDARD), response);
         verifyNoInteractions(events, memberships);
     }
 
@@ -171,7 +174,7 @@ class CheckInServiceTests {
         when(memberships.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE))
                 .thenReturn(List.of(active));
 
-        assertEquals(EVENT_ID, service.createCheckIn(eventRequest()).eventId());
+        assertEquals(EVENT_ID, service.createCheckIn(eventRequest(), staffId).eventId());
         verify(entityManager).flush();
     }
 
@@ -181,7 +184,7 @@ class CheckInServiceTests {
         stubEvent(true, coverRequired);
         CheckInCreateRequest request = eventRequest();
 
-        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request));
+        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request, staffId));
         verify(memberships).findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE);
         verifyNoInteractions(entityManager);
     }
@@ -196,7 +199,97 @@ class CheckInServiceTests {
                 .thenReturn(List.of(free));
         CheckInCreateRequest request = eventRequest();
 
-        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request));
+        assertThrows(CheckInMembershipRequiredException.class, () -> service.createCheckIn(request, staffId));
+        verifyNoInteractions(entityManager);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void explicitOverrideAdmitsMemberWithoutQualifyingMembership(boolean coverRequired) {
+        stubEvent(true, coverRequired);
+        Membership free = new Membership();
+        free.setType(MembershipType.FREE);
+        when(memberships.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE))
+                .thenReturn(coverRequired ? List.of(free) : List.of());
+        CheckInCreateRequest request = overrideRequest(Instant.now(), null);
+
+        CheckInResponse response = service.createCheckIn(request, staffId);
+
+        var persisted = ArgumentCaptor.forClass(CheckIn.class);
+        verify(entityManager).persist(persisted.capture());
+        assertEquals(AdmissionType.MEMBERSHIP_OVERRIDE, persisted.getValue().getAdmissionType());
+        assertEquals(AdmissionType.MEMBERSHIP_OVERRIDE, response.admissionType());
+        assertEquals(staffId, response.checkedInById());
+        assertEquals(CheckInMethod.QR_SCAN, response.method());
+    }
+
+    @Test
+    void overrideRequestIsRecordedAsStandardWhenMembershipQualifies() {
+        stubEvent(true, true);
+        Membership paid = new Membership();
+        paid.setType(MembershipType.PAID);
+        when(memberships.findByMember_IdAndStatus(memberId, MembershipStatus.ACTIVE))
+                .thenReturn(List.of(paid));
+
+        assertEquals(AdmissionType.STANDARD,
+                service.createCheckIn(overrideRequest(Instant.now(), null), staffId).admissionType());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"STANDARD", "MEMBERSHIP_OVERRIDE"})
+    void overrideRetryReturnsOriginalDecisionAndRejectsChangedIntent(String originalAdmissionType) {
+        Instant createdAt = Instant.parse("2020-01-01T12:00:00Z");
+        CheckIn existing = stubExistingCheckIn(createdAt);
+        existing.setEventId(EVENT_ID);
+        existing.setMethod(CheckInMethod.QR_SCAN);
+        existing.setMembershipOverrideRequested(true);
+        existing.setAdmissionType(AdmissionType.valueOf(originalAdmissionType));
+        var changed = new CheckInCreateRequest(checkInId, memberId, null, CheckInMethod.QR_SCAN,
+                createdAt, EVENT_ID, false);
+
+        assertEquals(CheckInResponse.from(existing),
+                service.createCheckIn(overrideRequest(createdAt, null), staffId));
+        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(changed, staffId));
+        verifyNoInteractions(events, memberships, entityManager);
+    }
+
+    @Test
+    void overrideCannotUseAnotherStaffAccount() {
+        var request = overrideRequest(Instant.now(), UUID.randomUUID());
+
+        assertThrows(AccessDeniedException.class, () -> service.createCheckIn(request, staffId));
+        verifyNoInteractions(users, members, entityManager);
+    }
+
+    @Test
+    void disabledStaffCannotOverride() {
+        stubStaff();
+        when(staff.isEnabled()).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.createCheckIn(overrideRequest(Instant.now(), null), staffId));
+        verifyNoInteractions(members, entityManager);
+    }
+
+    @Test
+    void overrideCannotAdmitBannedMember() {
+        stubNewCheckIn(MemberStatus.BANNED);
+
+        assertThrows(BannedMemberCheckInException.class,
+                () -> service.createCheckIn(overrideRequest(Instant.now(), null), staffId));
+        verifyNoInteractions(events, memberships, entityManager);
+    }
+
+    @Test
+    void overrideCannotBypassDuplicateCheck() {
+        stubEvent(true, false);
+        Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        when(checkIns.existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
+                memberId, createdAt.minus(8, ChronoUnit.HOURS), createdAt.plus(8, ChronoUnit.HOURS)))
+                .thenReturn(true);
+
+        assertThrows(DuplicateCheckInException.class,
+                () -> service.createCheckIn(overrideRequest(createdAt, null), staffId));
         verifyNoInteractions(entityManager);
     }
 
@@ -205,7 +298,7 @@ class CheckInServiceTests {
     void eventWithoutMembershipRequirementSkipsMembershipLookup(boolean coverRequired) {
         stubEvent(false, coverRequired);
 
-        assertEquals(EVENT_ID, service.createCheckIn(eventRequest()).eventId());
+        assertEquals(EVENT_ID, service.createCheckIn(eventRequest(), staffId).eventId());
         verifyNoInteractions(memberships);
     }
 
@@ -214,7 +307,7 @@ class CheckInServiceTests {
         stubNewCheckIn(MemberStatus.ACTIVE);
         CheckInCreateRequest request = eventRequest();
 
-        assertThrows(ResourceNotFoundException.class, () -> service.createCheckIn(request));
+        assertThrows(ResourceNotFoundException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(memberships, entityManager);
     }
 
@@ -223,7 +316,7 @@ class CheckInServiceTests {
         CheckInCreateRequest request = eventRequest();
         stubExistingCheckIn(request.createdAt().truncatedTo(ChronoUnit.MILLIS)).setEventId(43L);
 
-        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request));
+        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request, staffId));
         verifyNoInteractions(events, memberships, entityManager);
     }
 
@@ -237,25 +330,36 @@ class CheckInServiceTests {
 
     private CheckInCreateRequest eventRequest() {
         return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL,
-                Instant.now(), EVENT_ID);
+                Instant.now(), EVENT_ID, null);
     }
 
     private CheckInCreateRequest requestAt(Instant createdAt) {
-        return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL, createdAt, null);
+        return new CheckInCreateRequest(checkInId, memberId, staffId, CheckInMethod.MANUAL, createdAt, null, null);
+    }
+
+    private CheckInCreateRequest overrideRequest(Instant createdAt, UUID requestedStaffId) {
+        return new CheckInCreateRequest(checkInId, memberId, requestedStaffId, CheckInMethod.QR_SCAN,
+                createdAt, EVENT_ID, true);
     }
 
     private void stubNewCheckIn(MemberStatus status) {
         when(members.findByIdForUpdate(memberId)).thenReturn(Optional.of(member));
         when(member.getId()).thenReturn(memberId);
         when(member.getStatus()).thenReturn(status);
+        stubStaff();
+    }
+
+    private void stubStaff() {
         when(users.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staff.isEnabled()).thenReturn(true);
+        when(staff.getRole()).thenReturn(UserRole.STAFF);
         when(staff.getId()).thenReturn(staffId);
     }
 
     private CheckIn stubExistingCheckIn(Instant createdAt) {
         when(members.findByIdForUpdate(memberId)).thenReturn(Optional.of(member));
         when(member.getId()).thenReturn(memberId);
-        when(staff.getId()).thenReturn(staffId);
+        stubStaff();
         CheckIn existing = new CheckIn();
         existing.setId(checkInId);
         existing.setMember(member);
