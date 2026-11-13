@@ -1,12 +1,17 @@
 package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.controller.AuthController;
+import com.easleyjs.membership.controller.EventController;
 import com.easleyjs.membership.entity.AppUser;
+import com.easleyjs.membership.entity.Event;
 import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.repository.AppUserRepository;
+import com.easleyjs.membership.repository.EventRepository;
+import com.easleyjs.membership.service.EventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -23,13 +28,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, UserDetailsConfig.class})
+@WebMvcTest({AuthController.class, EventController.class})
+@Import({SecurityConfig.class, UserDetailsConfig.class, EventService.class})
 class SessionSecurityTests {
     private static final String EMAIL = "staff@example.com";
     private static final String PASSWORD = "test + password";
@@ -38,6 +45,7 @@ class SessionSecurityTests {
     @Autowired ObjectMapper mapper;
     @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean AppUserRepository users;
+    @MockitoBean EventRepository events;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -102,6 +110,36 @@ class SessionSecurityTests {
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         mvc.perform(get("/members.html"))
                 .andExpect(redirectedUrl("/login.html"));
+    }
+
+    @Test
+    void eventCreationUsesAuthenticatedAccountAsCreator() throws Exception {
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+
+        when(users.findById(userId)).thenReturn(Optional.of(account));
+        when(events.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Csrf eventCsrf = csrf(session);
+        mvc.perform(post("/api/events").session(session)
+                        .header(eventCsrf.headerName(), eventCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Door night",
+                                  "location": "OUTLAND",
+                                  "membershipRequired": true,
+                                  "coverRequired": false
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.createdBy").value(userId.toString()));
+
+        var savedEvent = ArgumentCaptor.forClass(Event.class);
+        verify(events).save(savedEvent.capture());
+        assertThat(savedEvent.getValue().getCreatedBy()).isSameAs(account);
     }
 
     private MockHttpServletRequestBuilder login(MockHttpSession session, String password) {

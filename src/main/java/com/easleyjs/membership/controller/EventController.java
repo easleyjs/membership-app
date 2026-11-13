@@ -2,10 +2,12 @@ package com.easleyjs.membership.controller;
 
 import com.easleyjs.membership.dto.EventCreateRequest;
 import com.easleyjs.membership.dto.EventResponse;
+import com.easleyjs.membership.security.SessionUser;
 import com.easleyjs.membership.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,9 +33,10 @@ public class EventController {
 
     @PostMapping("")
     public ResponseEntity<EventResponse> createEvent(
-            @Valid @RequestBody EventCreateRequest eventRequest
+            @Valid @RequestBody EventCreateRequest eventRequest,
+            @AuthenticationPrincipal SessionUser user
     ) {
-        EventResponse createdEvent = eventService.createEvent(eventRequest);
+        EventResponse createdEvent = eventService.createEvent(eventRequest, user.getId());
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

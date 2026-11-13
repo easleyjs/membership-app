@@ -5,6 +5,7 @@ import com.easleyjs.membership.entity.EventLocation;
 import com.easleyjs.membership.entity.EventStatus;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 public record EventResponse(
         Long id,
@@ -14,7 +15,8 @@ public record EventResponse(
         boolean membershipRequired,
         boolean coverRequired,
         EventLocation location,
-        EventStatus status
+        EventStatus status,
+        UUID createdBy
 ) {
     public static EventResponse from(Event event) {
         return new EventResponse(
@@ -25,7 +27,8 @@ public record EventResponse(
                 event.isMembershipRequired(),
                 event.isCoverRequired(),
                 event.getLocation(),
-                event.getStatus()
+                event.getStatus(),
+                event.getCreatedBy() == null ? null : event.getCreatedBy().getId()
         );
     }
 }

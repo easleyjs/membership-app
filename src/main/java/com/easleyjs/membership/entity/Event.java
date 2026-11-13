@@ -27,4 +27,8 @@ public class Event {
 
     @Enumerated(EnumType.STRING)
     private EventStatus status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", updatable = false)
+    private AppUser createdBy;
 }
