@@ -9,8 +9,13 @@ import java.time.Instant;
 public record CheckInCreateRequest(
         @NotNull UUID id,
         @NotNull UUID memberId,
-        @NotNull UUID staffMemberId,
+        UUID staffMemberId,
         @NotNull CheckInMethod method,
         @NotNull Instant createdAt,
-        Long eventId
-) {}
+        Long eventId,
+        Boolean overrideMembership
+) {
+    public boolean requestsMembershipOverride() {
+        return Boolean.TRUE.equals(overrideMembership);
+    }
+}
