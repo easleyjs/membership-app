@@ -9,6 +9,23 @@ window.App = window.App || {};
 
   const API_BASE = "/api";
 
+  function createCheckInId() {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+
+    // getRandomValues is also available when the portal is served over HTTP.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // UUID version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC UUID variant
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20),
+    ].join("-");
+  }
+
   class ApiError extends Error {
     constructor(message, status) {
       super(message);
@@ -129,7 +146,7 @@ window.App = window.App || {};
       return request("/checkin", {
         method: "POST",
         body: {
-          id: crypto.randomUUID(),
+          id: createCheckInId(),
           memberId,
           eventId,
           overrideMembership,

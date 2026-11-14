@@ -158,8 +158,11 @@ window.App = window.App || {};
     return true;
   }
 
-  function matchesSearch(m) {
-    return m.name.toLowerCase().includes(searchTerm.trim().toLowerCase());
+  function matchesSearch(member, query) {
+    return member.name.toLowerCase().includes(query)
+      || member.email.toLowerCase().includes(query)
+      || (member.id != null && /^#?\d+$/.test(query)
+        && String(member.id).startsWith(query.replace(/^#/, "")));
   }
 
   function statusLabel(status) {
@@ -168,9 +171,13 @@ window.App = window.App || {};
   }
 
   let activeMember = null;
+  let detailTrigger = null;
 
-  function openDetail(member) {
+  function openDetail(member, trigger) {
     activeMember = member;
+    detailTrigger = trigger;
+    const search = document.getElementById("search");
+    if (document.activeElement === search) search.blur();
 
     const overlay = document.getElementById("memberModalOverlay");
     const avatar = document.getElementById("modalAvatar");
@@ -198,20 +205,24 @@ window.App = window.App || {};
     if (mode === "door") {
       const eventId = document.getElementById("doorEvent").value;
       App.door.openDetail(member, eventNames, eventId ? Number(eventId) : null, (checkIn, isCurrentDetail) => {
-        if (isCurrentDetail) closeDetail();
         if (!checkIns.some(({ id }) => id === checkIn.id)) checkIns.push(checkIn);
         if (mode === "door" && activeFilter === "checked-in") render();
+        if (isCurrentDetail) closeDetail();
       });
     }
 
     overlay.classList.add("open");
-    document.getElementById("modalCloseBtn").focus();
+    document.getElementById("modalCloseBtn").focus({ preventScroll: true });
   }
 
   function closeDetail() {
+    if (!activeMember) return;
     document.getElementById("memberModalOverlay").classList.remove("open");
     App.door.closeDetail();
     activeMember = null;
+    const target = detailTrigger?.isConnected ? detailTrigger : document.getElementById("resultsHeading");
+    detailTrigger = null;
+    target.focus({ preventScroll: true });
   }
 
   function setMode(newMode) {
@@ -294,7 +305,8 @@ window.App = window.App || {};
         if (String(checkIn.eventId) === eventId) checkedInMembers.add(checkIn.memberId);
       }
     }
-    const filtered = members.filter((m) => matchesFilter(m, checkedInMembers) && matchesSearch(m));
+    const query = searchTerm.trim().toLowerCase();
+    const filtered = members.filter((m) => matchesFilter(m, checkedInMembers) && matchesSearch(m, query));
 
     heading.textContent = `Members (${filtered.length})`;
     list.innerHTML = "";
@@ -347,11 +359,11 @@ window.App = window.App || {};
       card.querySelector(".card-name-text").textContent = m.name;
       card.querySelector(".card-member-number").textContent = m.id == null ? "" : ` (#${m.id})`;
 
-      card.addEventListener("click", () => openDetail(m));
+      card.addEventListener("click", () => openDetail(m, card));
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          openDetail(m);
+          openDetail(m, card);
         }
       });
 

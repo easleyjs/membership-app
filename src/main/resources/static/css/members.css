@@ -236,6 +236,7 @@ body.door-mode .admin-only{
 
 #search::placeholder{
   color: var(--search-hint);
+  font-size: 15px;
   opacity: 1;
 }
 
@@ -621,13 +622,13 @@ main{
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 28px;
-  height: 28px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: #232a35;
   color: var(--muted);
   border: none;
-  font-size: 13px;
+  font-size: 26px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -664,6 +665,11 @@ main{
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 4px;
+}
+
+.door-mode .modal-name{
+  padding-inline: 44px;
+  overflow-wrap: anywhere;
 }
 
 .door-mode .modal{
@@ -920,6 +926,19 @@ main{
   color: var(--ok);
   font-size: 18px;
   font-weight: 700;
+}
+
+@media (pointer: coarse){
+  .per-page select,
+  .event-picker select,
+  .modal-note-form textarea{
+    font-size: 16px;
+  }
+
+  .card,
+  .modal-overlay{
+    touch-action: manipulation;
+  }
 }
 
 @media (prefers-reduced-motion: reduce){

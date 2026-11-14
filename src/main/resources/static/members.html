@@ -35,24 +35,24 @@
         <circle cx="11" cy="11" r="7"></circle>
         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
-      <input type="text" id="search" aria-label="Search members" placeholder="Search members...">
+      <input type="text" id="search" aria-label="Search by name, member number, or email" placeholder="Name, member number, or email">
       <button class="clear-search" id="clearSearch" aria-label="Clear search" type="button">✕</button>
     </div>
   </header>
 
   <nav class="chips" id="chips">
     <button class="chip active" data-filter="all">All</button>
+    <button class="chip door-only" id="checkedInFilter" data-filter="checked-in" disabled>Checked In</button>
     <button class="chip" data-filter="admin">Admin</button>
     <button class="chip" data-filter="staff">Staff</button>
     <button class="chip" data-filter="active">Active</button>
     <button class="chip" data-filter="inactive">Inactive</button>
     <button class="chip" data-filter="banned">Banned</button>
-    <button class="chip door-only" id="checkedInFilter" data-filter="checked-in" disabled>Checked In</button>
   </nav>
 
   <main>
     <p class="door-only door-data-status" id="doorDataStatus" role="status" hidden></p>
-    <h2 class="results-heading" id="resultsHeading" aria-live="polite">Members</h2>
+    <h2 class="results-heading" id="resultsHeading" aria-live="polite" tabindex="-1">Members</h2>
     <div class="list" id="list"></div>
     <div class="empty" id="empty" style="display:none;">No members match this filter.</div>
 
@@ -73,7 +73,7 @@
     </div>
   </main>
 
-  <button class="fab" id="addBtn" title="Add member" aria-label="Add member">+</button>
+  <button class="fab admin-only" id="addBtn" title="Add member" aria-label="Add member">+</button>
 
   <div class="modal-overlay" id="memberModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalName">
