@@ -84,6 +84,15 @@ window.App = window.App || {};
     getMember(id) {
       return request(`/members/${id}`, { method: "GET" });
     },
+    getMemberships(memberNumber, page) {
+      return request(`/members/${memberNumber}/memberships?page=${page}`);
+    },
+    getMemberNotes(memberNumber, page) {
+      return request(`/members/${memberNumber}/notes?page=${page}`);
+    },
+    addMemberNote(memberNumber, createdById, content) {
+      return request(`/members/${memberNumber}/notes`, { method: "POST", body: { createdById, content } });
+    },
 
     // --- Users (Admin view — includes role; AppUser 1:1 Member) ---
     getUsers(params = {}) {
@@ -106,14 +115,28 @@ window.App = window.App || {};
     },
 
     // --- Door check-in ---
+    getEvents() {
+      return request("/events");
+    },
+    getCheckIns(memberId) {
+      return request(memberId ? `/checkin/${memberId}` : "/checkin");
+    },
     checkIn(qrPayload) {
       return request("/door/check-in", { method: "POST", body: { qrPayload } });
     },
     // Manual check-in from the member card (scan failed / no phone, etc).
-    // ASSUMPTION: same endpoint, keyed by memberId instead of a QR payload —
-    // adjust if the backend expects something different.
-    checkInManual(memberId) {
-      return request("/door/check-in", { method: "POST", body: { memberId, method: "manual" } });
+    checkInManual(memberId, eventId, overrideMembership) {
+      return request("/checkin", {
+        method: "POST",
+        body: {
+          id: crypto.randomUUID(),
+          memberId,
+          eventId,
+          overrideMembership,
+          method: "MANUAL",
+          createdAt: new Date().toISOString(),
+        },
+      });
     },
   };
 

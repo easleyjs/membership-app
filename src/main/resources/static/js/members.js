@@ -41,6 +41,9 @@ window.App = window.App || {};
   let isLoading = true;
   let loadError = null;
   let hasLoadedOnce = false;
+  let loadVersion = 0;
+  let checkIns = [];
+  let eventNames = new Map();
 
   let activeFilter = "all";
   let searchTerm = "";
@@ -48,65 +51,100 @@ window.App = window.App || {};
   let currentPage = 1;
   let mode = "door";
 
-  // Door view — GET /api/members returns:
-  //   { memberNumber: <int>, firstName, lastName, status: "ACTIVE" | "INACTIVE", email }
-  // No role info here, and Door staff don't need it.
-  function normalizeMember(raw) {
+  function normalizeMember(raw, role) {
     return {
       id: raw.memberNumber,
+      memberId: raw.id,
       name: `${raw.firstName || ""} ${raw.lastName || ""}`.trim(),
       status: (raw.status || "").toLowerCase(),
       email: raw.email || "",
-      role: undefined,
-    };
-  }
-
-  // Admin view — GET /api/users. AppUser <-> Member is 1:1, so this is
-  // assumed to return the member fields plus `role` — either flattened
-  // ({ memberNumber, firstName, lastName, status, email, role }) or nested
-  // under `member` ({ role, member: { memberNumber, firstName, lastName,
-  // status, email } }). Adjust this once the real /users response shape is
-  // confirmed.
-  function normalizeUser(raw) {
-    const member = raw.member || raw;
-    return {
-      id: member.memberNumber || raw.memberNumber,
-      name: `${member.firstName || ""} ${member.lastName || ""}`.trim(),
-      status: (member.status || "").toLowerCase(),
-      email: member.email || raw.email || "",
-      role: (raw.role || member.role || "").toLowerCase() || undefined,
+      role: role?.toLowerCase(),
+      hasNotes: raw.hasNotes,
     };
   }
 
   async function loadData() {
+    const version = ++loadVersion;
     isLoading = true;
     loadError = null;
     render();
 
     try {
       if (mode === "admin") {
-        const data = await App.api.getUsers();
-        const list = Array.isArray(data) ? data : data?.users || [];
-        members = list.map(normalizeUser);
+        const [memberData, userData] = await Promise.all([
+          App.api.getMembers(),
+          App.api.getUsers(),
+        ]);
+        if (version !== loadVersion) return;
+        const memberList = Array.isArray(memberData) ? memberData : memberData?.members || [];
+        const users = Array.isArray(userData) ? userData : userData?.users || [];
+        const rolesByMemberId = new Map(users.map((user) => [user.memberId, user.role]));
+        members = memberList.map((member) => normalizeMember(member, rolesByMemberId.get(member.id)));
       } else {
-        const data = await App.api.getMembers();
+        const [memberResult, eventResult, checkInResult] = await Promise.allSettled([
+          App.api.getMembers(),
+          App.api.getEvents(),
+          App.api.getCheckIns(),
+        ]);
+        if (version !== loadVersion) return;
+        updateDoorFilters(eventResult, checkInResult);
+        if (memberResult.status === "rejected") throw memberResult.reason;
+        const data = memberResult.value;
         const list = Array.isArray(data) ? data : data?.members || [];
-        members = list.map(normalizeMember);
+        members = list.map((member) => normalizeMember(member));
       }
     } catch (err) {
+      if (version !== loadVersion) return;
       loadError = err.message || "Couldn't load data.";
       members = [];
     } finally {
-      isLoading = false;
-      render();
+      if (version === loadVersion) {
+        isLoading = false;
+        render();
+      }
     }
+  }
+
+  function selectFilter(filter) {
+    activeFilter = filter;
+    currentPage = 1;
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.filter === filter);
+    });
+  }
+
+  function updateDoorFilters(eventResult, checkInResult) {
+    const select = document.getElementById("doorEvent");
+    const checkedInFilter = document.getElementById("checkedInFilter");
+    const status = document.getElementById("doorDataStatus");
+    const previousEvent = select.value;
+    const events = eventResult.value ?? [];
+    eventNames = new Map(events.map(({ id, name }) => [id, name]));
+    const eventError = eventResult.status === "rejected";
+    const checkInError = checkInResult.status === "rejected";
+
+    select.replaceChildren(...events.map(({ id, name }) => new Option(name, String(id))));
+    if (events.some(({ id }) => String(id) === previousEvent)) select.value = previousEvent;
+    if (!events.length) {
+      select.add(new Option(eventError ? "Events unavailable" : "No events", ""));
+    }
+    select.disabled = !events.length;
+    checkIns = checkInResult.value ?? [];
+    checkedInFilter.disabled = !events.length || checkInError;
+    if (checkedInFilter.disabled && activeFilter === "checked-in") selectFilter("all");
+
+    status.textContent = [
+      eventError ? "Couldn't load events." : "",
+      checkInError ? "Couldn't load check-ins." : "",
+    ].filter(Boolean).join(" ");
+    status.hidden = !status.textContent;
   }
 
   function initials(name) {
     return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   }
 
-  function matchesFilter(m) {
+  function matchesFilter(m, checkedInMembers) {
     if (mode === "door" && (activeFilter === "admin" || activeFilter === "staff")) {
       return true; // shouldn't happen, but fail open to "all" behavior
     }
@@ -115,11 +153,18 @@ window.App = window.App || {};
     if (activeFilter === "staff") return m.role === "staff";
     if (activeFilter === "active") return m.status === "active";
     if (activeFilter === "inactive") return m.status === "inactive";
+    if (activeFilter === "banned") return m.status === "banned";
+    if (activeFilter === "checked-in") return checkedInMembers.has(m.memberId);
     return true;
   }
 
   function matchesSearch(m) {
     return m.name.toLowerCase().includes(searchTerm.trim().toLowerCase());
+  }
+
+  function statusLabel(status) {
+    if (status === "banned") return "Banned";
+    return status === "active" ? "Active" : "Inactive";
   }
 
   let activeMember = null;
@@ -134,8 +179,6 @@ window.App = window.App || {};
     const status = document.getElementById("modalStatus");
     const statusText = document.getElementById("modalStatusText");
     const email = document.getElementById("modalEmail");
-    const actions = document.getElementById("modalActions");
-    const checkInBtn = document.getElementById("modalCheckInBtn");
     const suspendBtn = document.getElementById("modalSuspendBtn");
     const reissueBtn = document.getElementById("modalReissueBtn");
 
@@ -143,13 +186,8 @@ window.App = window.App || {};
     name.textContent = member.name || "—";
     memberNumber.textContent = `Member #${member.id}`;
     status.className = `badge badge-status is-${member.status}`;
-    statusText.textContent = member.status === "active" ? "ACTIVE" : "INACTIVE";
+    statusText.textContent = statusLabel(member.status).toUpperCase();
     email.textContent = member.email || "—";
-
-    // Edit/Suspend/Reissue QR are available in both modes now. Check In is
-    // Door-only — it's for manual entries when a scan didn't work.
-    actions.style.display = "flex";
-    checkInBtn.style.display = mode === "door" ? "" : "none";
 
     const isActive = member.status === "active";
     suspendBtn.textContent = isActive ? "Suspend" : "Reactivate";
@@ -157,14 +195,22 @@ window.App = window.App || {};
     suspendBtn.disabled = false;
     reissueBtn.disabled = false;
     reissueBtn.textContent = "Reissue QR";
-    checkInBtn.disabled = false;
-    checkInBtn.textContent = "Check In";
+    if (mode === "door") {
+      const eventId = document.getElementById("doorEvent").value;
+      App.door.openDetail(member, eventNames, eventId ? Number(eventId) : null, (checkIn, isCurrentDetail) => {
+        if (isCurrentDetail) closeDetail();
+        if (!checkIns.some(({ id }) => id === checkIn.id)) checkIns.push(checkIn);
+        if (mode === "door" && activeFilter === "checked-in") render();
+      });
+    }
 
     overlay.classList.add("open");
+    document.getElementById("modalCloseBtn").focus();
   }
 
   function closeDetail() {
     document.getElementById("memberModalOverlay").classList.remove("open");
+    App.door.closeDetail();
     activeMember = null;
   }
 
@@ -177,6 +223,7 @@ window.App = window.App || {};
     }
 
     const modeChanged = newMode !== mode;
+    if (modeChanged && activeMember) closeDetail();
     mode = newMode;
 
     const body = document.body;
@@ -192,26 +239,18 @@ window.App = window.App || {};
     scanBtn.classList.toggle("visible", isDoor);
     switchModeBtn.textContent = isDoor ? "Switch to Admin" : "Switch to Door";
     switchModeBtn.style.display = App.auth.isAdmin() ? "" : "none";
-    document.title = `Admin Portal · ${isDoor ? "Door" : "Admin"}`;
-    if (title) {
-      title.firstChild.textContent = isDoor ? "Door" : "Admin";
-    }
+    const sectionTitle = isDoor ? "OUTLAND Door" : "OUTLAND Admin";
+    document.title = sectionTitle;
+    if (title) title.textContent = sectionTitle;
 
-    // Admin/Staff aren't valid filters in Door mode — fall back to All.
-    if (isDoor && (activeFilter === "admin" || activeFilter === "staff")) {
-      activeFilter = "all";
-      document.querySelectorAll(".chip").forEach((c) => {
-        c.classList.toggle("active", c.dataset.filter === "all");
-      });
+    if ((isDoor && (activeFilter === "admin" || activeFilter === "staff")) ||
+        (!isDoor && activeFilter === "checked-in")) {
+      selectFilter("all");
     }
 
     currentPage = 1;
 
-    // Each mode pulls from a different endpoint (Door: /members, Admin:
-    // /users), so switching modes means fetching fresh data, not just
-    // re-filtering what's already loaded. Also always fetch on the very
-    // first call (from init), since modeChanged is false when the default
-    // mode matches the initial `mode` value.
+    // Refresh the member list and mode-specific data on entry.
     if (modeChanged || !hasLoadedOnce) {
       hasLoadedOnce = true;
       loadData();
@@ -223,7 +262,7 @@ window.App = window.App || {};
   function render() {
     const list = document.getElementById("list");
     const empty = document.getElementById("empty");
-    const count = document.getElementById("count");
+    const heading = document.getElementById("resultsHeading");
     const pagination = document.getElementById("pagination");
     const pageInfo = document.getElementById("pageInfo");
     const prevPage = document.getElementById("prevPage");
@@ -235,7 +274,7 @@ window.App = window.App || {};
       empty.textContent = "Loading members…";
       empty.style.display = "block";
       pagination.style.display = "none";
-      count.textContent = "";
+      heading.textContent = "Members";
       return;
     }
 
@@ -244,13 +283,20 @@ window.App = window.App || {};
       empty.textContent = `Couldn't load members: ${loadError}`;
       empty.style.display = "block";
       pagination.style.display = "none";
-      count.textContent = "";
+      heading.textContent = "Members";
       return;
     }
 
-    const filtered = members.filter((m) => matchesFilter(m) && matchesSearch(m));
+    const eventId = document.getElementById("doorEvent").value;
+    const checkedInMembers = new Set();
+    if (activeFilter === "checked-in" && eventId) {
+      for (const checkIn of checkIns) {
+        if (String(checkIn.eventId) === eventId) checkedInMembers.add(checkIn.memberId);
+      }
+    }
+    const filtered = members.filter((m) => matchesFilter(m, checkedInMembers) && matchesSearch(m));
 
-    count.textContent = ` (${filtered.length})`;
+    heading.textContent = `Members (${filtered.length})`;
     list.innerHTML = "";
 
     if (filtered.length === 0) {
@@ -278,7 +324,6 @@ window.App = window.App || {};
       card.className = "card";
       card.tabIndex = 0;
 
-      const statusLabel = m.status === "active" ? "Active" : "Inactive";
       const roleBadge =
         m.role === "admin"
           ? `<span class="badge badge-role badge-role-admin">Admin</span>`
@@ -287,17 +332,20 @@ window.App = window.App || {};
           : "";
 
       card.innerHTML = `
-        <div class="avatar">${initials(m.name)}</div>
+        <div class="avatar"></div>
         <div class="card-body">
-          <div class="card-name">${m.name}</div>
+          <div class="card-name"><span class="card-name-text"></span><span class="card-member-number"></span></div>
           <div class="card-tags">
             ${roleBadge}
             <span class="badge badge-status is-${m.status}">
-              <span class="dot"></span>${statusLabel}
+              <span class="dot"></span>${statusLabel(m.status)}
             </span>
           </div>
         </div>
       `;
+      card.querySelector(".avatar").textContent = initials(m.name);
+      card.querySelector(".card-name-text").textContent = m.name;
+      card.querySelector(".card-member-number").textContent = m.id == null ? "" : ` (#${m.id})`;
 
       card.addEventListener("click", () => openDetail(m));
       card.addEventListener("keydown", (e) => {
@@ -311,8 +359,9 @@ window.App = window.App || {};
     });
   }
 
-  function bindEvents() {
+  function bindEvents(user) {
     const chips = document.getElementById("chips");
+    const doorEvent = document.getElementById("doorEvent");
     const search = document.getElementById("search");
     const clearSearch = document.getElementById("clearSearch");
     const perPage = document.getElementById("perPage");
@@ -327,7 +376,6 @@ window.App = window.App || {};
     const scanBtn = document.getElementById("scanBtn");
     const memberModalOverlay = document.getElementById("memberModalOverlay");
     const modalCloseBtn = document.getElementById("modalCloseBtn");
-    const modalCheckInBtn = document.getElementById("modalCheckInBtn");
     const modalEditBtn = document.getElementById("modalEditBtn");
     const modalSuspendBtn = document.getElementById("modalSuspendBtn");
     const modalReissueBtn = document.getElementById("modalReissueBtn");
@@ -336,10 +384,12 @@ window.App = window.App || {};
 
     chips.addEventListener("click", (e) => {
       const btn = e.target.closest(".chip");
-      if (!btn) return;
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
-      btn.classList.add("active");
-      activeFilter = btn.dataset.filter;
+      if (!btn || btn.disabled) return;
+      selectFilter(btn.dataset.filter);
+      render();
+    });
+
+    doorEvent.addEventListener("change", () => {
       currentPage = 1;
       render();
     });
@@ -436,29 +486,13 @@ window.App = window.App || {};
 
     // Member detail modal
     modalCloseBtn.addEventListener("click", closeDetail);
+    App.door.bindDetailEvents(user.id);
+    memberModalOverlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDetail();
+    });
 
     memberModalOverlay.addEventListener("click", (e) => {
       if (e.target === memberModalOverlay) closeDetail();
-    });
-
-    modalCheckInBtn.addEventListener("click", async () => {
-      if (!activeMember) return;
-
-      modalCheckInBtn.disabled = true;
-      modalCheckInBtn.textContent = "Checking in…";
-
-      try {
-        await App.door.checkInMember(activeMember);
-        modalCheckInBtn.textContent = "Checked in ✓";
-        setTimeout(() => {
-          modalCheckInBtn.disabled = false;
-          modalCheckInBtn.textContent = "Check In";
-        }, 1500);
-      } catch (err) {
-        modalCheckInBtn.disabled = false;
-        modalCheckInBtn.textContent = "Check In";
-        alert(`Couldn't check in: ${err.message}`);
-      }
     });
 
     modalEditBtn.addEventListener("click", () => {
@@ -524,7 +558,7 @@ window.App = window.App || {};
     userMenuBtn.setAttribute("aria-label", user.displayName);
     status.hidden = true;
     document.body.classList.remove("session-pending");
-    bindEvents();
+    bindEvents(user);
     setMode(App.auth.isAdmin() ? "admin" : "door");
   }
 

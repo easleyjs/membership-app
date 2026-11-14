@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Portal · Admin</title>
+<title>OUTLAND Admin</title>
 <link rel="stylesheet" href="css/members.css">
 </head>
 <body class="session-pending">
@@ -12,7 +12,7 @@
 
   <header class="header">
     <div class="header-top">
-      <h1>Admin<span class="count" id="count"></span></h1>
+      <h1>OUTLAND Admin</h1>
       <div class="user-menu">
         <button class="user-avatar" id="userMenuBtn" aria-haspopup="true" aria-expanded="false"></button>
         <div class="user-dropdown" id="userDropdown">
@@ -22,13 +22,20 @@
         </div>
       </div>
     </div>
+    <div class="door-only event-picker">
+      <label for="doorEvent">Event</label>
+      <select id="doorEvent" disabled>
+        <option value="">Loading events…</option>
+      </select>
+    </div>
     <button class="scan-btn" id="scanBtn" type="button">SCAN</button>
+    <h2 class="door-only search-heading"><label for="search">Search</label></h2>
     <div class="search-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="7"></circle>
         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
-      <input type="text" id="search" placeholder="Search members...">
+      <input type="text" id="search" aria-label="Search members" placeholder="Search members...">
       <button class="clear-search" id="clearSearch" aria-label="Clear search" type="button">✕</button>
     </div>
   </header>
@@ -39,13 +46,22 @@
     <button class="chip" data-filter="staff">Staff</button>
     <button class="chip" data-filter="active">Active</button>
     <button class="chip" data-filter="inactive">Inactive</button>
+    <button class="chip" data-filter="banned">Banned</button>
+    <button class="chip door-only" id="checkedInFilter" data-filter="checked-in" disabled>Checked In</button>
   </nav>
 
   <main>
+    <p class="door-only door-data-status" id="doorDataStatus" role="status" hidden></p>
+    <h2 class="results-heading" id="resultsHeading" aria-live="polite">Members</h2>
     <div class="list" id="list"></div>
     <div class="empty" id="empty" style="display:none;">No members match this filter.</div>
 
     <div class="pagination" id="pagination">
+      <div class="page-nav">
+        <button id="prevPage" aria-label="Previous page">‹</button>
+        <span id="pageInfo">Page 1 of 1</span>
+        <button id="nextPage" aria-label="Next page">›</button>
+      </div>
       <div class="per-page">
         <label for="perPage">Results per page</label>
         <select id="perPage">
@@ -53,11 +69,6 @@
           <option value="15">15</option>
           <option value="20">20</option>
         </select>
-      </div>
-      <div class="page-nav">
-        <button id="prevPage" aria-label="Previous page">‹</button>
-        <span id="pageInfo">Page 1 of 1</span>
-        <button id="nextPage" aria-label="Next page">›</button>
       </div>
     </div>
   </main>
@@ -68,7 +79,7 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalName">
       <button class="modal-close" id="modalCloseBtn" aria-label="Close">✕</button>
 
-      <div class="modal-avatar" id="modalAvatar"></div>
+      <div class="modal-avatar admin-only" id="modalAvatar"></div>
       <h2 class="modal-name" id="modalName"></h2>
       <div class="modal-member-number" id="modalMemberNumber"></div>
 
@@ -77,18 +88,62 @@
           <span class="modal-label">Status</span>
           <span class="badge badge-status" id="modalStatus"><span class="dot"></span><span id="modalStatusText"></span></span>
         </div>
+        <div class="modal-row door-only">
+          <span class="modal-label">Membership Type</span>
+          <span class="modal-value" id="modalMembershipType"></span>
+        </div>
+        <div class="modal-row door-only">
+          <span class="modal-label">Checked-In</span>
+          <span class="modal-value" id="modalCheckedIn"></span>
+        </div>
         <div class="modal-row">
           <span class="modal-label">Email</span>
           <span id="modalEmail"></span>
         </div>
       </div>
 
-      <div class="modal-actions" id="modalActions">
-        <button class="modal-btn modal-btn-checkin" id="modalCheckInBtn">Check In</button>
-        <button class="modal-btn" id="modalEditBtn">Edit</button>
-        <button class="modal-btn modal-btn-danger" id="modalSuspendBtn">Suspend</button>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-checkin door-only" id="modalCheckInBtn">Check In</button>
+        <button class="modal-btn modal-btn-danger door-only" id="modalOverrideBtn" title="Override the event’s membership requirement">Override</button>
+        <button class="modal-btn admin-only" id="modalEditBtn">Edit</button>
+        <button class="modal-btn modal-btn-danger admin-only" id="modalSuspendBtn">Suspend</button>
         <button class="modal-btn modal-btn-accent" id="modalReissueBtn">Reissue QR</button>
       </div>
+      <p class="modal-feedback door-only" id="modalCheckInFeedback" role="status" hidden></p>
+
+      <section class="modal-history door-only" aria-label="Member activity">
+        <div class="modal-pills" role="group" aria-label="Member activity view">
+          <button class="chip" type="button" id="modalCheckInsTab" aria-pressed="true" aria-controls="modalCheckInsPanel">Check-Ins</button>
+          <button class="chip" type="button" id="modalNotesTab" aria-pressed="false" aria-controls="modalNotesPanel">
+            <span class="note-warning" id="modalNoteWarning" aria-label="Member has notes" role="img" hidden></span>Notes
+          </button>
+        </div>
+        <div id="modalCheckInsPanel">
+          <p class="modal-feedback" id="modalCheckInsMessage" role="status" hidden></p>
+          <ul class="modal-entries" id="modalCheckInsList"></ul>
+        </div>
+        <div id="modalNotesPanel" hidden>
+          <button class="modal-link" type="button" id="modalAddNote" aria-expanded="false" aria-controls="modalNoteForm">Add Note</button>
+          <form class="modal-note-form" id="modalNoteForm" hidden>
+            <label for="modalNoteContent">Note</label>
+            <textarea id="modalNoteContent" rows="3" maxlength="2000" required></textarea>
+            <div class="modal-form-actions">
+              <button class="modal-btn modal-btn-accent" type="submit" id="modalSaveNote">Save Note</button>
+              <button class="modal-btn" type="button" id="modalCancelNote">Cancel</button>
+            </div>
+          </form>
+          <p class="modal-feedback" id="modalNoteFeedback" role="status" hidden></p>
+          <p class="modal-feedback" id="modalNotesMessage" role="status" hidden></p>
+          <ul class="modal-entries" id="modalNotesList"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="check-in-toast-region" role="status">
+    <div class="check-in-toast" id="checkInToast" hidden>
+      <span class="check-in-toast-icon" aria-hidden="true">✓</span>
+      <span id="checkInToastMessage"></span>
     </div>
   </div>
 

@@ -3,8 +3,11 @@ package com.easleyjs.membership.config;
 import com.easleyjs.membership.controller.AuthController;
 import com.easleyjs.membership.controller.CheckInController;
 import com.easleyjs.membership.controller.EventController;
+import com.easleyjs.membership.controller.MemberNoteController;
 import com.easleyjs.membership.dto.CheckInCreateRequest;
 import com.easleyjs.membership.dto.CheckInResponse;
+import com.easleyjs.membership.dto.MemberNoteCreateRequest;
+import com.easleyjs.membership.dto.MemberNoteResponse;
 import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
 import com.easleyjs.membership.entity.CheckInMethod;
@@ -15,6 +18,7 @@ import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.service.CheckInService;
 import com.easleyjs.membership.service.EventService;
+import com.easleyjs.membership.service.MemberNoteService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,7 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AuthController.class, CheckInController.class, EventController.class})
+@WebMvcTest({AuthController.class, CheckInController.class, EventController.class, MemberNoteController.class})
 @Import({SecurityConfig.class, UserDetailsConfig.class, EventService.class})
 class SessionSecurityTests {
     private static final String EMAIL = "staff@example.com";
@@ -55,6 +59,7 @@ class SessionSecurityTests {
     @MockitoBean AppUserRepository users;
     @MockitoBean EventRepository events;
     @MockitoBean CheckInService checkIns;
+    @MockitoBean MemberNoteService notes;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -164,7 +169,8 @@ class SessionSecurityTests {
         var request = new CheckInCreateRequest(checkInId, memberId, null, CheckInMethod.QR_SCAN,
                 createdAt, 42L, true);
         when(checkIns.createCheckIn(request, userId)).thenReturn(new CheckInResponse(checkInId,
-                memberId, userId, createdAt, CheckInMethod.QR_SCAN, 42L, AdmissionType.MEMBERSHIP_OVERRIDE));
+                memberId, userId, createdAt, CheckInMethod.QR_SCAN, 42L, AdmissionType.MEMBERSHIP_OVERRIDE,
+                "Door Staff"));
 
         Csrf checkInCsrf = csrf(session);
         mvc.perform(post("/api/checkin").session(session)
@@ -182,6 +188,7 @@ class SessionSecurityTests {
                                 """.formatted(checkInId, memberId, createdAt)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.checkedInById").value(userId.toString()))
+                .andExpect(jsonPath("$.checkedInByName").value("Door Staff"))
                 .andExpect(jsonPath("$.admissionType").value("MEMBERSHIP_OVERRIDE"));
 
         when(checkIns.createCheckIn(request, userId)).thenThrow(new AccessDeniedException("Access denied."));
@@ -191,6 +198,32 @@ class SessionSecurityTests {
                         .content(mapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void staffCanAddNotesUnderTheirOwnAccount() throws Exception {
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+
+        var note = new MemberNoteCreateRequest(userId, "Member requested a follow-up.");
+        when(notes.createMemberNote(42L, note)).thenReturn(
+                new MemberNoteResponse(1L, "Door", note.content(), Instant.now(), "Door Staff"));
+        Csrf noteCsrf = csrf(session);
+
+        mvc.perform(post("/api/members/42/notes").session(session)
+                        .header(noteCsrf.headerName(), noteCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(note)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.createdByName").value("Door Staff"));
+
+        mvc.perform(post("/api/members/42/notes").session(session)
+                        .header(noteCsrf.headerName(), noteCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new MemberNoteCreateRequest(UUID.randomUUID(), note.content()))))
+                .andExpect(status().isForbidden());
     }
 
     private MockHttpServletRequestBuilder login(MockHttpSession session, String password) {

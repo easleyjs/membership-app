@@ -17,10 +17,10 @@ import com.easleyjs.membership.repository.CheckInRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.repository.MemberRepository;
 import com.easleyjs.membership.repository.MembershipRepository;
-import jakarta.transaction.Transactional;
 import jakarta.persistence.EntityManager;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.Duration;
@@ -207,6 +207,7 @@ public class CheckInService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<CheckInResponse> getCheckInsByMember(UUID memberId) {
         return checkInRepository.findByMember_Id(memberId)
                 .stream()
@@ -214,6 +215,7 @@ public class CheckInService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<CheckInResponse> getAllCheckIns() {
         return checkInRepository.findAll()
                 .stream()

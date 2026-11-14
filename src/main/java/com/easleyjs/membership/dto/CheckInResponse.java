@@ -3,8 +3,10 @@ package com.easleyjs.membership.dto;
 import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.CheckIn;
 import com.easleyjs.membership.entity.CheckInMethod;
+import com.easleyjs.membership.entity.Member;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 public record CheckInResponse(
@@ -14,9 +16,11 @@ public record CheckInResponse(
         Instant createdAt,
         CheckInMethod method,
         Long eventId,
-        AdmissionType admissionType
+        AdmissionType admissionType,
+        String checkedInByName
 ) {
     public static CheckInResponse from(CheckIn checkIn) {
+        Member staff = checkIn.getCheckedInBy().getMember();
         return new CheckInResponse(
                 checkIn.getId(),
                 checkIn.getMember().getId(),
@@ -24,7 +28,9 @@ public record CheckInResponse(
                 checkIn.getCreatedAt(),
                 checkIn.getMethod(),
                 checkIn.getEventId(),
-                checkIn.getAdmissionType()
+                checkIn.getAdmissionType(),
+                staff == null ? null : (Objects.toString(staff.getFirstName(), "") + " "
+                        + Objects.toString(staff.getLastName(), "")).strip()
         );
     }
 }

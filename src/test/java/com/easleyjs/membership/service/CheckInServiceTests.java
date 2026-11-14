@@ -149,6 +149,8 @@ class CheckInServiceTests {
     @Test
     void validOfflineCheckInIsPersistedAndReturned() {
         stubNewCheckIn(MemberStatus.ACTIVE);
+        Member staffMember = new Member("Door", "Staff", "door@example.com", 1L, "token");
+        when(staff.getMember()).thenReturn(staffMember);
         Instant createdAt = Instant.now().minus(6, ChronoUnit.DAYS);
         Instant normalizedCreatedAt = createdAt.truncatedTo(ChronoUnit.MILLIS);
 
@@ -160,7 +162,7 @@ class CheckInServiceTests {
         assertSame(member, persisted.getValue().getMember());
         assertSame(staff, persisted.getValue().getCheckedInBy());
         assertEquals(new CheckInResponse(checkInId, memberId, staffId, normalizedCreatedAt,
-                CheckInMethod.MANUAL, null, AdmissionType.STANDARD), response);
+                CheckInMethod.MANUAL, null, AdmissionType.STANDARD, "Door Staff"), response);
         verifyNoInteractions(events, memberships);
     }
 

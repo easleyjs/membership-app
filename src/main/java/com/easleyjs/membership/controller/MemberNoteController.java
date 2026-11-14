@@ -2,6 +2,7 @@ package com.easleyjs.membership.controller;
 
 import com.easleyjs.membership.dto.MemberNoteCreateRequest;
 import com.easleyjs.membership.dto.MemberNoteResponse;
+import com.easleyjs.membership.security.SessionUser;
 import com.easleyjs.membership.service.MemberNoteService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -10,6 +11,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -36,8 +39,12 @@ public class MemberNoteController {
     @PostMapping
     public ResponseEntity<MemberNoteResponse> createMemberNote(
             @PathVariable Long memberNumber,
-            @Valid @RequestBody MemberNoteCreateRequest request
+            @Valid @RequestBody MemberNoteCreateRequest request,
+            @AuthenticationPrincipal SessionUser user
     ) {
+        if (!user.getId().equals(request.createdById())) {
+            throw new AccessDeniedException("Notes must use the signed-in staff account.");
+        }
         MemberNoteResponse createdNote = noteService.createMemberNote(memberNumber, request);
 
         return ResponseEntity
