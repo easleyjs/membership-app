@@ -40,6 +40,15 @@ public class CheckInController {
         return checkInService.getCheckInsByMember(id);
     }
 
+    @PostMapping("/comp")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CheckInResponse createCompCheckIn(
+            @Valid @RequestBody CheckInCreateRequest request,
+            @AuthenticationPrincipal SessionUser user
+    ) {
+        return checkInService.createCompCheckIn(request, user.getId());
+    }
+
     @GetMapping("")
     public List<CheckInResponse> findAll() {
         return checkInService.getAllCheckIns();

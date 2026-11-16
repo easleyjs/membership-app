@@ -1,7 +1,6 @@
 package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.dto.*;
-import com.easleyjs.membership.dto.*;
 import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.exception.MemberNotFoundException;
@@ -80,13 +79,16 @@ public class MemberService {
             Long memberNumber,
             MemberUpdateRequest request
     ) {
-        Member member = memberRepository.findByMemberNumber(memberNumber)
+        Member member = memberRepository.findByMemberNumberForUpdate(memberNumber)
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member: " + memberNumber + " not found."
                 ));
         member.setFirstName(request.firstName());
         member.setLastName(request.lastName());
         member.setEmail(request.email());
+        if (request.membershipType() != null) {
+            membershipService.changeMembershipType(member, request.membershipType());
+        }
 
         return MemberUpdateResponse.from(member);
     }

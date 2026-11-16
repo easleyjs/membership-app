@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface MembershipRepository extends JpaRepository<Membership, Long> {
     Page<Membership> findByMember_MemberNumber(Long memberNumber, Pageable pageable);
 
+    List<Membership> findByMember_IdAndProgram(UUID memberId, MembershipProgram program);
+
     List<Membership> findByMember_IdAndStatus(
             UUID memberId,
             MembershipStatus status

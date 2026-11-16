@@ -8,8 +8,8 @@ Accept: application/json
 
 > {%
     ["dupAdminId", "dupMemberId", "dupOriginalId", "dupBoundaryId",
-     "dupOriginalResponse", "dupOriginalAt", "dupSevenHoursLater",
-     "dupSevenHoursEarlier", "dupEightHoursLater"].forEach(key =>
+     "dupOriginalResponse", "dupOriginalAt", "dupElevenHoursLater",
+     "dupElevenHoursEarlier", "dupTwelveHoursLater"].forEach(key =>
         client.global.clear(key)
     );
 
@@ -26,9 +26,9 @@ Accept: application/json
     const hour = 60 * 60 * 1000;
     const original = Date.now() - 16 * hour;
     client.global.set("dupOriginalAt", new Date(original).toISOString());
-    client.global.set("dupSevenHoursLater", new Date(original + 7 * hour).toISOString());
-    client.global.set("dupSevenHoursEarlier", new Date(original - 7 * hour).toISOString());
-    client.global.set("dupEightHoursLater", new Date(original + 8 * hour).toISOString());
+    client.global.set("dupElevenHoursLater", new Date(original + 11 * hour).toISOString());
+    client.global.set("dupElevenHoursEarlier", new Date(original - 11 * hour).toISOString());
+    client.global.set("dupTwelveHoursLater", new Date(original + 12 * hour).toISOString());
 %}
 
 ### 2. Create a fresh member
@@ -136,7 +136,7 @@ Content-Type: application/json
     });
 %}
 
-### 7. A check-in seven hours later is still a duplicate
+### 7. A check-in eleven hours later is still a duplicate
 POST {{baseUrl}}/api/checkin
 Content-Type: application/json
 
@@ -145,11 +145,11 @@ Content-Type: application/json
   "memberId": "{{dupMemberId}}",
   "staffMemberId": "{{dupAdminId}}",
   "method": "MANUAL",
-  "createdAt": "{{dupSevenHoursLater}}"
+  "createdAt": "{{dupElevenHoursLater}}"
 }
 
 > {%
-    client.test("Seven hours later is rejected", function () {
+    client.test("Eleven hours later is rejected", function () {
         client.assert(response.status === 409, "Expected HTTP 409");
         client.assert(response.body.code === "DUPLICATE_CHECK_IN", "Wrong error code");
     });
@@ -164,11 +164,11 @@ Content-Type: application/json
   "memberId": "{{dupMemberId}}",
   "staffMemberId": "{{dupAdminId}}",
   "method": "MANUAL",
-  "createdAt": "{{dupSevenHoursEarlier}}"
+  "createdAt": "{{dupElevenHoursEarlier}}"
 }
 
 > {%
-    client.test("Seven hours earlier is rejected", function () {
+    client.test("Eleven hours earlier is rejected", function () {
         client.assert(response.status === 409, "Expected HTTP 409");
         client.assert(response.body.code === "DUPLICATE_CHECK_IN", "Wrong error code");
     });
@@ -190,7 +190,7 @@ Accept: application/json
     });
 %}
 
-### 10. Exactly eight hours later is allowed
+### 10. Exactly twelve hours later is allowed
 POST {{baseUrl}}/api/checkin
 Content-Type: application/json
 
@@ -199,16 +199,16 @@ Content-Type: application/json
   "memberId": "{{dupMemberId}}",
   "staffMemberId": "{{dupAdminId}}",
   "method": "MANUAL",
-  "createdAt": "{{dupEightHoursLater}}"
+  "createdAt": "{{dupTwelveHoursLater}}"
 }
 
 > {%
-    client.test("Exactly eight hours later is accepted", function () {
+    client.test("Exactly twelve hours later is accepted", function () {
         client.assert(response.status === 201, "Expected HTTP 201");
         client.assert(response.body.id != null, "Check-in ID is missing");
         client.assert(response.body.id !== client.global.get("dupOriginalId"), "Expected a new record");
         client.assert(response.body.memberId === client.global.get("dupMemberId"), "Wrong member");
-        client.assert(Date.parse(response.body.createdAt) === Date.parse(client.global.get("dupEightHoursLater")), "Wrong timestamp");
+        client.assert(Date.parse(response.body.createdAt) === Date.parse(client.global.get("dupTwelveHoursLater")), "Wrong timestamp");
     });
 
     if (response.status === 201 && response.body.id) {

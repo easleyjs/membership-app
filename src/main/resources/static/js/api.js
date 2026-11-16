@@ -9,6 +9,23 @@ window.App = window.App || {};
 
   const API_BASE = "/api";
 
+  function createCheckInId() {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+
+    // getRandomValues is also available when the portal is served over HTTP.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // UUID version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC UUID variant
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20),
+    ].join("-");
+  }
+
   class ApiError extends Error {
     constructor(message, status) {
       super(message);
@@ -59,6 +76,20 @@ window.App = window.App || {};
     return data;
   }
 
+  function manualCheckIn(path, memberId, eventId, overrideMembership) {
+    return request(path, {
+      method: "POST",
+      body: {
+        id: createCheckInId(),
+        memberId,
+        eventId,
+        overrideMembership,
+        method: "MANUAL",
+        createdAt: new Date().toISOString(),
+      },
+    });
+  }
+
   const api = {
     ApiError,
 
@@ -84,6 +115,26 @@ window.App = window.App || {};
     getMember(id) {
       return request(`/members/${id}`, { method: "GET" });
     },
+    saveMember(fields, memberNumber) {
+      return memberNumber == null
+        ? request("/members", { method: "POST", body: fields })
+        : request(`/members/${memberNumber}/update`, { method: "PUT", body: fields });
+    },
+    setMemberBanned(memberNumber, banned) {
+      return request(`/members/${memberNumber}/${banned ? "ban" : "unban"}`, { method: "PUT" });
+    },
+    getMemberships(memberNumber, page) {
+      return request(`/members/${memberNumber}/memberships?page=${page}`);
+    },
+    getMemberNotes(memberNumber, page) {
+      return request(`/members/${memberNumber}/notes?page=${page}`);
+    },
+    addMemberNote(memberNumber, createdById, content) {
+      return request(`/members/${memberNumber}/notes`, { method: "POST", body: { createdById, content } });
+    },
+    deleteMemberNote(memberNumber, noteId) {
+      return request(`/members/${memberNumber}/notes/${noteId}`, { method: "DELETE" });
+    },
 
     // --- Users (Admin view — includes role; AppUser 1:1 Member) ---
     getUsers(params = {}) {
@@ -92,6 +143,15 @@ window.App = window.App || {};
     },
     getUser(id) {
       return request(`/users/${id}`, { method: "GET" });
+    },
+    createUser(fields) {
+      return request("/users", { method: "POST", body: fields });
+    },
+    searchEligibleMembers(query) {
+      return request(`/users/eligible-members?${new URLSearchParams({ query })}`);
+    },
+    updateUser(id, fields) {
+      return request(`/users/${id}`, { method: "PATCH", body: fields });
     },
 
     // --- Admin actions ---
@@ -106,14 +166,29 @@ window.App = window.App || {};
     },
 
     // --- Door check-in ---
+    getEvents() {
+      return request("/events");
+    },
+    saveEvent(fields, id) {
+      return id == null
+        ? request("/events", { method: "POST", body: fields })
+        : request(`/events/${id}`, { method: "PUT", body: fields });
+    },
+    deactivateEvent(id) {
+      return request(`/events/${id}/disable`, { method: "PATCH" });
+    },
+    getCheckIns(memberId) {
+      return request(memberId ? `/checkin/${memberId}` : "/checkin");
+    },
     checkIn(qrPayload) {
       return request("/door/check-in", { method: "POST", body: { qrPayload } });
     },
     // Manual check-in from the member card (scan failed / no phone, etc).
-    // ASSUMPTION: same endpoint, keyed by memberId instead of a QR payload —
-    // adjust if the backend expects something different.
-    checkInManual(memberId) {
-      return request("/door/check-in", { method: "POST", body: { memberId, method: "manual" } });
+    checkInManual(memberId, eventId, overrideMembership) {
+      return manualCheckIn("/checkin", memberId, eventId, overrideMembership);
+    },
+    compCheckIn(memberId) {
+      return manualCheckIn("/checkin/comp", memberId, null, true);
     },
   };
 

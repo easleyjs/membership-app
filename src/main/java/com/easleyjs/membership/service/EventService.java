@@ -70,7 +70,7 @@ public class EventService {
             Long id,
             @Valid EventCreateRequest request
     ) {
-        Event event = eventRepository.findById(id)
+        Event event = eventRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Event not found: " + id
                 ));
@@ -88,7 +88,7 @@ public class EventService {
 
     @Transactional
     public EventResponse disableEvent(Long eventId) {
-        Event event = eventRepository.findById(eventId)
+        Event event = eventRepository.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Event not found: " + eventId
                 ));

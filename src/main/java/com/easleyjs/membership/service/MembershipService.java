@@ -3,7 +3,6 @@ package com.easleyjs.membership.service;
 import com.easleyjs.membership.dto.MembershipCreateRequest;
 import com.easleyjs.membership.dto.MembershipResponse;
 import com.easleyjs.membership.entity.*;
-import com.easleyjs.membership.entity.*;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.exception.MembershipAlreadyExistsException;
 import com.easleyjs.membership.repository.MemberRepository;
@@ -33,7 +32,7 @@ public class MembershipService {
 
     @Transactional
     public MembershipResponse createMembership(Long memberNumber, @Valid MembershipCreateRequest request) {
-        Member member = memberRepository.findByMemberNumber(memberNumber)
+        Member member = memberRepository.findByMemberNumberForUpdate(memberNumber)
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member not found."
                 ));
@@ -91,6 +90,27 @@ public class MembershipService {
                     Instant.now()
             );
             membershipRepository.save(membership);
+        }
+    }
+
+    void changeMembershipType(Member member, MembershipType type) {
+        Membership selected = null;
+        for (Membership membership : membershipRepository.findByMember_IdAndProgram(member.getId(), MembershipProgram.OUTLAND)) {
+            if (membership.getType() == type) {
+                selected = membership;
+            } else if (membership.getStatus() == MembershipStatus.ACTIVE) {
+                membership.setStatus(MembershipStatus.CANCELLED);
+            }
+        }
+
+        if (selected == null) {
+            Instant now = Instant.now();
+            membershipRepository.save(new Membership(member, MembershipProgram.OUTLAND, type,
+                    MembershipStatus.ACTIVE, now, null, null, now));
+        } else if (selected.getStatus() != MembershipStatus.ACTIVE) {
+            selected.setStatus(MembershipStatus.ACTIVE);
+            selected.setValidFrom(Instant.now());
+            selected.setValidUntil(null);
         }
     }
 

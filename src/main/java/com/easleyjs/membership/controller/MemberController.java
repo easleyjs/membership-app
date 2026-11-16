@@ -1,12 +1,15 @@
 package com.easleyjs.membership.controller;
 
-import com.easleyjs.membership.dto.*;
+import com.easleyjs.membership.entity.UserRole;
+import com.easleyjs.membership.security.SessionUser;
 import com.easleyjs.membership.dto.*;
 import com.easleyjs.membership.service.MemberService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,12 +47,15 @@ public class MemberController {
     @PutMapping("/{memberNumber}/update")
     public ResponseEntity<MemberUpdateResponse> updateMember(
             @PathVariable Long memberNumber,
-            @Valid @RequestBody MemberUpdateRequest request
+            @Valid @RequestBody MemberUpdateRequest request,
+            @AuthenticationPrincipal SessionUser user
     ) {
+        if (request.membershipType() != null && user.getRole() != UserRole.ADMIN) {
+            throw new AccessDeniedException("An administrator account is required to change membership type.");
+        }
         return ResponseEntity.ok(memberService.updateMember(memberNumber, request));
     }
 
-    // TODO: Add auth (require admin?)
     @PutMapping("/{memberNumber}/ban")
     public ResponseEntity<MemberStatusResponse> banMember(
             @PathVariable Long memberNumber,

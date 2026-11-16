@@ -2,10 +2,10 @@
   --bg: #12161c;
   --panel: #171c24;
   --border: #262d38;
-  --text: #e7ebf1;
+  --text: white;
   --muted: #8791a1;
-  --accent: #4fd1c5;
-  --accent-dim: #2c7a72;
+  --accent: darkred;
+  --focus: #ff8a80;
   --danger: #e2726b;
 }
 
@@ -97,12 +97,12 @@ input::placeholder{
 }
 
 input:focus{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,209,197,0.15);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(139,0,0,0.25);
 }
 
 input:focus-visible{
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -134,8 +134,8 @@ input:focus-visible{
 
 button{
   margin-top: 6px;
-  background: darkred;
-  color: white;
+  background: var(--accent);
+  color: var(--text);
   border: none;
   border-radius: 6px;
   padding: 12px;
@@ -154,7 +154,7 @@ button:active{
 }
 
 button:focus-visible{
-  outline: 2px solid #ff8a80;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -172,8 +172,8 @@ button:focus-visible{
 }
 
 .forgot-wrap a:hover{
-  color: var(--accent);
-  border-bottom-color: var(--accent-dim);
+  color: var(--text);
+  border-bottom-color: currentColor;
 }
 
 .error{
