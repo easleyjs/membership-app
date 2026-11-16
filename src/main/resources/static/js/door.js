@@ -1,7 +1,5 @@
 /* door.js
- * Camera scanner and check-in result.
- * TODO: camera scanning itself is still a placeholder — this is a
- * stub so router.js has something to call when the Door view is shown.
+ * Membership QR scanner and check-in details.
  */
 window.App = window.App || {};
 
@@ -11,14 +9,113 @@ window.App = window.App || {};
   let noteToDelete = null;
   let checkInToastTimer;
   let checkInStatusTimer;
+  let scanSession = null;
+  let cameraCleanup = Promise.resolve();
+  const MEMBER_UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
   const CHECK_IN_WINDOW_MS = 12 * 60 * 60 * 1000;
   const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
   const element = (id) => document.getElementById(id);
 
-  function init() {
-    // TODO: start the camera scanner, read a QR code, and call
-    // App.api.checkIn(qrPayload) with the result. Show the check-in
-    // outcome (member name, status, allow/deny) in the Door view.
+  function bindScannerEvents() {
+    element("scanCloseBtn").addEventListener("click", closeScanner);
+    element("scanRetryBtn").addEventListener("click", () => scanSession?.retry?.());
+    element("scanDialog").addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeScanner();
+    });
+    window.addEventListener("pagehide", closeScanner);
+  }
+
+  async function openScanner(findMember, onMemberFound) {
+    if (scanSession) return;
+
+    const status = element("scanStatus");
+    const retry = element("scanRetryBtn");
+    const session = { scanner: null, started: null, lastCode: null, lookingUp: false };
+    scanSession = session;
+    retry.hidden = true;
+    status.textContent = "Starting camera…";
+    element("scanDialog").showModal();
+
+    const isCurrent = () => scanSession === session;
+    async function readCode(text) {
+      const memberId = text.trim().toLowerCase();
+      if (!isCurrent() || session.lookingUp || memberId === session.lastCode) return;
+      session.lastCode = memberId;
+      session.retry = null;
+      if (document.activeElement === retry) element("scanCloseBtn").focus();
+      retry.hidden = true;
+
+      if (!MEMBER_UUID.test(memberId)) {
+        status.textContent = "Scan an OUTLAND membership QR code.";
+        return;
+      }
+
+      session.lookingUp = true;
+      status.textContent = "Looking up member…";
+      let member;
+      try {
+        member = await findMember(memberId);
+      } catch {
+        if (isCurrent()) {
+          status.textContent = "Couldn’t load the member list.";
+          session.retry = () => {
+            session.lastCode = null;
+            readCode(memberId);
+          };
+          retry.hidden = false;
+        }
+        return;
+      } finally {
+        session.lookingUp = false;
+      }
+
+      if (!isCurrent()) return;
+      if (!member) {
+        status.textContent = "No member found for this QR code. Try another code.";
+        return;
+      }
+      closeScanner();
+      onMemberFound(member);
+    }
+
+    session.started = cameraCleanup.then(async () => {
+      if (!isCurrent()) return false;
+      session.scanner = new Html5Qrcode("scanReader", {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      });
+      await session.scanner.start({ facingMode: "environment" }, { fps: 10 }, readCode);
+      return true;
+    });
+
+    try {
+      await session.started;
+      if (isCurrent() && session.lastCode === null) {
+        status.textContent = "Hold a membership QR code in view of the camera.";
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        status.textContent = window.isSecureContext
+          ? "Couldn’t start the camera. Check camera permissions or search for the member manually."
+          : "Camera scanning requires HTTPS or localhost. Search for the member manually.";
+        console.warn("Couldn’t start the QR scanner:", error);
+      }
+    }
+  }
+
+  function closeScanner() {
+    if (!scanSession) return;
+    const session = scanSession;
+    scanSession = null;
+    element("scanDialog").close();
+
+    // Wait for any pending camera permission prompt before stopping the stream.
+    cameraCleanup = session.started.catch(() => false).then(async (started) => {
+      if (started) await session.scanner.stop();
+      session.scanner?.clear();
+    }).catch((error) => {
+      console.warn("Couldn’t close the QR scanner:", error);
+    });
   }
 
   // Manual check-in — triggered from the member detail modal when a scan
@@ -352,6 +449,9 @@ window.App = window.App || {};
     });
   }
 
-  window.App.door = { init, checkInMember, currentCheckIns, openDetail, closeDetail, bindDetailEvents };
+  window.App.door = {
+    bindScannerEvents, openScanner, closeScanner,
+    checkInMember, currentCheckIns, openDetail, closeDetail, bindDetailEvents,
+  };
 
 })();

@@ -669,13 +669,15 @@ main{
 }
 
 .member-detail .modal-name,
-.admin-editor .modal-name{
+.admin-editor .modal-name,
+.scan-dialog .modal-name{
   padding-inline: 44px;
   overflow-wrap: anywhere;
 }
 
 .member-detail,
-.admin-editor{
+.admin-editor,
+.scan-dialog{
   max-width: 480px;
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
@@ -689,12 +691,22 @@ main{
   display: none;
 }
 
-.admin-editor{
+.admin-editor,
+.scan-dialog{
   width: calc(100% - 40px);
   color: var(--text);
 }
 
+.scan-dialog .modal-name{
+  margin-bottom: 16px;
+}
+
+#scanRetryBtn{
+  margin-top: 12px;
+}
+
 .admin-editor::backdrop,
+.scan-dialog::backdrop,
 .note-delete-dialog::backdrop{
   background: rgba(6,8,11,0.7);
 }

@@ -69,7 +69,8 @@
 
       try {
         await App.auth.login(usernameInput.value, passwordInput.value);
-        window.location.replace('members.html');
+        const next = new URLSearchParams(window.location.search).get('next');
+        window.location.replace(next === 'qr-preview' ? 'qr-preview.html' : 'members.html');
       } catch (err) {
         showLoginError(err.message);
         submit.disabled = false;
