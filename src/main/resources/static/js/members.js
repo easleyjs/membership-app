@@ -73,6 +73,22 @@ window.App = window.App || {};
     };
   }
 
+  async function getMemberList() {
+    const data = await App.api.getMembers();
+    return Array.isArray(data) ? data : data?.members || [];
+  }
+
+  async function findScannedMember(memberId) {
+    if (!isLoading && !loadError) {
+      const member = members.find((entry) => entry.memberId === memberId);
+      if (member) return member;
+    }
+
+    const list = await getMemberList();
+    const member = list.find((entry) => entry.id === memberId);
+    return member ? normalizeMember(member) : null;
+  }
+
   async function loadData() {
     const version = ++loadVersion;
     isLoading = true;
@@ -86,13 +102,12 @@ window.App = window.App || {};
           if (version === loadVersion) entities = events;
           return;
         }
-        const [memberData, userData, events] = await Promise.all([
-          App.api.getMembers(),
+        const [memberList, userData, events] = await Promise.all([
+          getMemberList(),
           App.api.getUsers(),
           section === "members" ? App.api.getEvents().catch(() => []) : [],
         ]);
         if (version !== loadVersion) return;
-        const memberList = Array.isArray(memberData) ? memberData : memberData?.members || [];
         const users = Array.isArray(userData) ? userData : userData?.users || [];
         if (section === "users") {
           const membersById = new Map(memberList.map((member) => [member.id, member]));
@@ -112,16 +127,14 @@ window.App = window.App || {};
         rememberEvents(events);
       } else {
         const [memberResult, eventResult, checkInResult] = await Promise.allSettled([
-          App.api.getMembers(),
+          getMemberList(),
           App.api.getEvents(),
           App.api.getCheckIns(),
         ]);
         if (version !== loadVersion) return;
         updateDoorFilters(eventResult, checkInResult);
         if (memberResult.status === "rejected") throw memberResult.reason;
-        const data = memberResult.value;
-        const list = Array.isArray(data) ? data : data?.members || [];
-        members = list.map((member) => normalizeMember(member));
+        members = memberResult.value.map((member) => normalizeMember(member));
       }
     } catch (err) {
       if (version !== loadVersion) return;
@@ -322,6 +335,7 @@ window.App = window.App || {};
 
     const modeChanged = newMode !== mode;
     if (modeChanged && activeMember) closeDetail();
+    if (modeChanged && newMode !== "door") App.door.closeScanner();
     mode = newMode;
 
     const body = document.body;
@@ -620,9 +634,11 @@ window.App = window.App || {};
       setMode(mode === "door" ? "admin" : "door");
     });
 
+    App.door.bindScannerEvents();
     scanBtn.addEventListener("click", () => {
-      // Placeholder — this will launch the scan popup later
-      console.log("Scan clicked");
+      if (mode === "door") {
+        App.door.openScanner(findScannedMember, (member) => openDetail(member, scanBtn));
+      }
     });
 
     // Member detail modal

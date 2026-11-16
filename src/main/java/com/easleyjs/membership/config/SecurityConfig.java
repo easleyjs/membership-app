@@ -49,6 +49,9 @@ public class SecurityConfig {
                                 (request, response, failure) -> writeError(objectMapper, request, response,
                                         HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Sign in to continue."),
                                 PathPatternRequestMatcher.withDefaults().matcher("/api/**"))
+                        .defaultAuthenticationEntryPointFor(
+                                new LoginUrlAuthenticationEntryPoint("/login.html?next=qr-preview"),
+                                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/qr-preview.html"))
                         .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login.html"),
                                 AnyRequestMatcher.INSTANCE)
                         .accessDeniedHandler((request, response, failure) -> {

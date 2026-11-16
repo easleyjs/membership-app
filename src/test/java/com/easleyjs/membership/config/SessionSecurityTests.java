@@ -137,6 +137,21 @@ class SessionSecurityTests {
     }
 
     @Test
+    void qrPreviewPromptsForSignInAndLoadsAfterward() throws Exception {
+        mvc.perform(get("/qr-preview.html"))
+                .andExpect(redirectedUrl("/login.html?next=qr-preview"));
+        mvc.perform(get("/api/dev/members/42/qr.png"))
+                .andExpect(status().isUnauthorized());
+
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/qr-preview.html").session(session))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void eventCreationUsesAuthenticatedAccountAsCreator() throws Exception {
         var session = new MockHttpSession();
         Csrf loginCsrf = csrf(session);
