@@ -8,7 +8,10 @@ window.App = window.App || {};
 (function () {
 
   let detail = null;
+  let noteToDelete = null;
   let checkInToastTimer;
+  let checkInStatusTimer;
+  const CHECK_IN_WINDOW_MS = 12 * 60 * 60 * 1000;
   const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
   const element = (id) => document.getElementById(id);
 
@@ -88,14 +91,43 @@ window.App = window.App || {};
     return checkIn.checkedInByName || "Unknown staff";
   }
 
-  function renderCheckIns(current) {
-    const sorted = current.checkIns.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    const latest = sorted.find((checkIn) => current.eventId == null || checkIn.eventId === current.eventId);
+  function currentCheckIns(checkIns, onWindowChange) {
+    const now = Date.now();
+    let nextChange = Infinity;
+    const entries = checkIns.filter(({ createdAt }) => {
+      const startsAt = Date.parse(createdAt);
+      const expiresAt = startsAt + CHECK_IN_WINDOW_MS;
+      if (!Number.isFinite(startsAt) || expiresAt <= now) return false;
+      if (startsAt > now) {
+        nextChange = Math.min(nextChange, startsAt);
+        return false;
+      }
+      nextChange = Math.min(nextChange, expiresAt);
+      return true;
+    });
+    const timer = Number.isFinite(nextChange)
+      ? setTimeout(onWindowChange, Math.min(nextChange - now, CHECK_IN_WINDOW_MS))
+      : undefined;
+    return { entries, timer };
+  }
+
+  function renderCheckInStatus(eventCheckIns) {
+    clearTimeout(checkInStatusTimer);
+    const { entries, timer } = currentCheckIns(eventCheckIns, () => renderCheckInStatus(eventCheckIns));
+    checkInStatusTimer = timer;
+    const latest = entries[0];
     element("modalCheckedIn").textContent = latest
       ? `${dateTime.format(new Date(latest.createdAt))} (${staffName(latest)})`
-      : "No check-in";
+      : "Not checked in";
+  }
+
+  function renderCheckIns(current) {
+    const sorted = current.checkIns.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    renderCheckInStatus(current.eventId == null ? sorted : sorted.filter(({ eventId }) => eventId === current.eventId));
     element("modalCheckInsList").replaceChildren(...sorted.map((checkIn) => {
-      const event = checkIn.eventId == null ? "No event" : current.events.get(checkIn.eventId) || `Event #${checkIn.eventId}`;
+      const event = checkIn.eventId == null
+        ? checkIn.admissionType === "MEMBERSHIP_OVERRIDE" ? "Comp" : "No event"
+        : current.events.get(checkIn.eventId) || `Event #${checkIn.eventId}`;
       return entry(`${dateTime.format(new Date(checkIn.createdAt))} · ${staffName(checkIn)}`, event);
     }));
     showMessage("modalCheckInsMessage", sorted.length ? "" : "No check-ins yet.");
@@ -103,14 +135,30 @@ window.App = window.App || {};
 
   function renderNotes(current) {
     element("modalNoteWarning").hidden = !current.notes.length;
-    element("modalNotesList").replaceChildren(...current.notes.map((note) =>
-      entry(`${dateTime.format(new Date(note.createdAt))} · ${note.createdByName || note.createdBy || "Unknown staff"}`, note.content)
-    ));
+    element("modalNotesList").replaceChildren(...current.notes.map((note) => {
+      const meta = `${dateTime.format(new Date(note.createdAt))} · ${note.createdByName || note.createdBy || "Unknown staff"}`;
+      const row = entry(meta, note.content);
+      if (current.mode === "admin") {
+        row.classList.add("note-with-delete");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "note-delete";
+        remove.setAttribute("aria-label", `Delete note from ${meta}`);
+        remove.addEventListener("click", () => {
+          noteToDelete = { current, id: note.id };
+          showMessage("noteDeleteFeedback", "");
+          element("noteDeleteDialog").showModal();
+        });
+        row.append(remove);
+      }
+      return row;
+    }));
     showMessage("modalNotesMessage", current.notes.length ? "" : "No notes yet.");
   }
 
-  async function openDetail(member, events, eventId, onCheckIn) {
-    const current = { member, events, eventId, onCheckIn, checkIns: [], notes: [] };
+  async function openDetail(member, events, eventId, { mode, onCheckIn }) {
+    clearTimeout(checkInStatusTimer);
+    const current = { member, events, eventId, mode, onCheckIn, checkIns: null, notes: [], deletedNotes: new Set() };
     detail = current;
     selectPanel("CheckIns");
     showNoteForm(false);
@@ -120,7 +168,8 @@ window.App = window.App || {};
     element("modalNotesList").replaceChildren();
     element("modalSaveNote").disabled = false;
     element("modalCancelNote").disabled = false;
-    element("modalCheckInBtn").disabled = false;
+    element("modalCheckInBtn").disabled = mode !== "door";
+    element("modalCompBtn").disabled = mode !== "admin";
     element("modalOverrideBtn").disabled = eventId == null;
     element("modalMembershipType").textContent = "Loading…";
     element("modalCheckedIn").textContent = "Loading…";
@@ -144,10 +193,11 @@ window.App = window.App || {};
       try {
         const history = await App.api.getCheckIns(member.memberId);
         if (detail !== current) return;
-        current.checkIns = history;
+        const byId = new Map([...history, ...(current.checkIns ?? [])].map((checkIn) => [checkIn.id, checkIn]));
+        current.checkIns = [...byId.values()];
         renderCheckIns(current);
       } catch (error) {
-        if (detail !== current) return;
+        if (detail !== current || current.checkIns) return;
         element("modalCheckedIn").textContent = "Unavailable";
         showMessage("modalCheckInsMessage", `Couldn't load check-ins: ${error.message}`);
       }
@@ -157,7 +207,8 @@ window.App = window.App || {};
         const notes = await loadPages((page) => App.api.getMemberNotes(member.id, page), current);
         if (detail !== current) return;
         const byId = new Map([...current.notes, ...notes].map((note) => [note.id, note]));
-        current.notes = [...byId.values()].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        current.notes = [...byId.values()].filter(({ id }) => !current.deletedNotes.has(id))
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
         member.hasNotes = current.notes.length > 0;
         renderNotes(current);
       } catch (error) {
@@ -168,20 +219,72 @@ window.App = window.App || {};
   }
 
   function closeDetail() {
+    clearTimeout(checkInStatusTimer);
     detail = null;
   }
 
+  function bindNoteDeletion() {
+    const dialog = element("noteDeleteDialog");
+    const yes = element("noteDeleteYes");
+    const no = element("noteDeleteNo");
+    dialog.addEventListener("close", () => {
+      if (!dialog.open) noteToDelete = null;
+    });
+    dialog.addEventListener("cancel", (event) => {
+      if (yes.disabled) event.preventDefault();
+    });
+    element("noteDeleteForm").addEventListener("submit", async (event) => {
+      if (event.submitter === no && !yes.disabled) return;
+      event.preventDefault();
+      if (event.submitter !== yes || yes.disabled || !noteToDelete) return;
+      const { current, id } = noteToDelete;
+      if (detail !== current) return;
+      yes.disabled = true;
+      no.disabled = true;
+      showMessage("noteDeleteFeedback", "Deleting note…");
+      try {
+        await App.api.deleteMemberNote(current.member.id, id);
+      } catch (error) {
+        if (error.status !== 404) {
+          showMessage("noteDeleteFeedback", `Couldn't delete note: ${error.message}`);
+          yes.disabled = false;
+          no.disabled = false;
+          no.focus();
+          return;
+        }
+      }
+      yes.disabled = false;
+      no.disabled = false;
+      dialog.close();
+      current.deletedNotes.add(id);
+      current.notes = current.notes.filter((note) => note.id !== id);
+      current.member.hasNotes = current.notes.length > 0;
+      if (detail === current) {
+        renderNotes(current);
+        showMessage("modalNoteFeedback", "Note deleted.");
+        element("modalAddNote").focus();
+      }
+    });
+  }
+
   function bindDetailEvents(staffId) {
-    async function submitCheckIn(overrideMembership) {
+    bindNoteDeletion();
+    async function submitCheckIn({ overrideMembership = false, comp = false } = {}) {
       const current = detail;
-      const checkInBtn = element("modalCheckInBtn");
+      const checkInBtn = element(comp ? "modalCompBtn" : "modalCheckInBtn");
       const overrideBtn = element("modalOverrideBtn");
-      if (!current || checkInBtn.disabled || (overrideMembership && overrideBtn.disabled)) return;
+      if (current?.mode !== (comp ? "admin" : "door") || checkInBtn.disabled || (overrideMembership && overrideBtn.disabled)) return;
       checkInBtn.disabled = true;
       overrideBtn.disabled = true;
       showMessage("modalCheckInFeedback", "Checking in…");
       try {
-        const checkIn = await checkInMember(current.member, current.eventId, overrideMembership);
+        const checkIn = comp ? await App.api.compCheckIn(current.member.memberId)
+          : await checkInMember(current.member, current.eventId, overrideMembership);
+        if (comp && detail === current) {
+          current.checkIns = [checkIn, ...(current.checkIns ?? []).filter(({ id }) => id !== checkIn.id)];
+          renderCheckIns(current);
+          showMessage("modalCheckInFeedback", "");
+        }
         current.onCheckIn(checkIn, detail === current);
         showCheckInToast(current.member.name);
       } catch (error) {
@@ -194,8 +297,9 @@ window.App = window.App || {};
       }
     }
 
-    element("modalCheckInBtn").addEventListener("click", () => submitCheckIn(false));
-    element("modalOverrideBtn").addEventListener("click", () => submitCheckIn(true));
+    element("modalCheckInBtn").addEventListener("click", () => submitCheckIn());
+    element("modalOverrideBtn").addEventListener("click", () => submitCheckIn({ overrideMembership: true }));
+    element("modalCompBtn").addEventListener("click", () => submitCheckIn({ comp: true }));
     element("modalCheckInsTab").addEventListener("click", () => selectPanel("CheckIns"));
     element("modalNotesTab").addEventListener("click", () => selectPanel("Notes"));
 
@@ -248,6 +352,6 @@ window.App = window.App || {};
     });
   }
 
-  window.App.door = { init, checkInMember, openDetail, closeDetail, bindDetailEvents };
+  window.App.door = { init, checkInMember, currentCheckIns, openDetail, closeDetail, bindDetailEvents };
 
 })();

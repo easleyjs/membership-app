@@ -1,6 +1,8 @@
 package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.dto.ApiErrorResponse;
+import com.easleyjs.membership.repository.AppUserRepository;
+import com.easleyjs.membership.security.SessionRoleFilter;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +17,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
@@ -26,12 +29,19 @@ import java.io.IOException;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
+                                            AppUserRepository users) throws Exception {
         return http
+                .addFilterBefore(new SessionRoleFilter(users), AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/login.html", "/css/**", "/js/**", "/api/auth/csrf", "/images/**").permitAll()
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/members/{memberNumber}/ban",
+                                "/api/members/{memberNumber}/unban").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/members/{memberNumber}/notes/{noteId}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/checkin/comp").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/events/{id}/disable").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .requestCache(AbstractHttpConfigurer::disable)
                 .exceptionHandling(exceptions -> exceptions

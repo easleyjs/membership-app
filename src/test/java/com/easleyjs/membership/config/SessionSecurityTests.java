@@ -3,22 +3,26 @@ package com.easleyjs.membership.config;
 import com.easleyjs.membership.controller.AuthController;
 import com.easleyjs.membership.controller.CheckInController;
 import com.easleyjs.membership.controller.EventController;
+import com.easleyjs.membership.controller.MemberController;
 import com.easleyjs.membership.controller.MemberNoteController;
 import com.easleyjs.membership.dto.CheckInCreateRequest;
 import com.easleyjs.membership.dto.CheckInResponse;
 import com.easleyjs.membership.dto.MemberNoteCreateRequest;
 import com.easleyjs.membership.dto.MemberNoteResponse;
+import com.easleyjs.membership.dto.MemberStatusResponse;
 import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
 import com.easleyjs.membership.entity.CheckInMethod;
 import com.easleyjs.membership.entity.Event;
 import com.easleyjs.membership.entity.Member;
+import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.service.CheckInService;
 import com.easleyjs.membership.service.EventService;
 import com.easleyjs.membership.service.MemberNoteService;
+import com.easleyjs.membership.service.MemberService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -42,12 +46,16 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AuthController.class, CheckInController.class, EventController.class, MemberNoteController.class})
+@WebMvcTest({AuthController.class, CheckInController.class, EventController.class,
+        MemberNoteController.class, MemberController.class})
 @Import({SecurityConfig.class, UserDetailsConfig.class, EventService.class})
 class SessionSecurityTests {
     private static final String EMAIL = "staff@example.com";
@@ -60,6 +68,7 @@ class SessionSecurityTests {
     @MockitoBean EventRepository events;
     @MockitoBean CheckInService checkIns;
     @MockitoBean MemberNoteService notes;
+    @MockitoBean MemberService members;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -70,6 +79,7 @@ class SessionSecurityTests {
         account = new AppUser(member, passwordEncoder.encode(PASSWORD), UserRole.STAFF);
         ReflectionTestUtils.setField(account, "id", userId);
         when(users.findByMember_Email(EMAIL)).thenReturn(Optional.of(account));
+        when(users.findRoleById(userId)).thenAnswer(invocation -> Optional.of(account.getRole()));
     }
 
     @Test
@@ -224,6 +234,68 @@ class SessionSecurityTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(new MemberNoteCreateRequest(UUID.randomUUID(), note.content()))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void noteDeletionFollowsRoleChangesWithoutEndingTheSession() throws Exception {
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+        String sessionId = session.getId();
+        Csrf noteCsrf = csrf(session);
+        String path = "/api/members/42/notes/1";
+
+        mvc.perform(delete(path).session(session).header(noteCsrf.headerName(), noteCsrf.token()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(notes);
+
+        account.setRole(UserRole.ADMIN);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("ADMIN"));
+        mvc.perform(delete(path).session(session))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("INVALID_CSRF_TOKEN"));
+        mvc.perform(delete(path).session(session).header(noteCsrf.headerName(), noteCsrf.token()))
+                .andExpect(status().isNoContent());
+        verify(notes).deleteMemberNote(42L, 1L);
+
+        account.setRole(UserRole.STAFF);
+        account.setEnabled(false);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("STAFF"));
+        mvc.perform(delete(path).session(session).header(noteCsrf.headerName(), noteCsrf.token()))
+                .andExpect(status().isForbidden());
+        assertThat(session.isInvalid()).isFalse();
+        assertThat(session.getId()).isEqualTo(sessionId);
+    }
+
+    @Test
+    void onlyAdminsCanBanOrUnbanMembers() throws Exception {
+        var staffSession = new MockHttpSession();
+        Csrf loginCsrf = csrf(staffSession);
+        mvc.perform(login(staffSession, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+        Csrf staffCsrf = csrf(staffSession);
+        for (String action : new String[]{"ban", "unban"}) {
+            mvc.perform(put("/api/members/42/" + action).session(staffSession)
+                            .header(staffCsrf.headerName(), staffCsrf.token()))
+                    .andExpect(status().isForbidden());
+        }
+
+        account.setRole(UserRole.ADMIN);
+        var adminSession = new MockHttpSession();
+        Csrf adminLoginCsrf = csrf(adminSession);
+        mvc.perform(login(adminSession, PASSWORD).header(adminLoginCsrf.headerName(), adminLoginCsrf.token()))
+                .andExpect(status().isNoContent());
+        Csrf adminCsrf = csrf(adminSession);
+        when(members.banMember(42L, null)).thenReturn(new MemberStatusResponse(MemberStatus.BANNED));
+        when(members.unbanMember(42L)).thenReturn(new MemberStatusResponse(MemberStatus.ACTIVE));
+        mvc.perform(put("/api/members/42/ban").session(adminSession)
+                        .header(adminCsrf.headerName(), adminCsrf.token()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("BANNED"));
+        mvc.perform(put("/api/members/42/unban").session(adminSession)
+                        .header(adminCsrf.headerName(), adminCsrf.token()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
     private MockHttpServletRequestBuilder login(MockHttpSession session, String password) {

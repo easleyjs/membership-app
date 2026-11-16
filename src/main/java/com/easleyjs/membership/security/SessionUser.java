@@ -26,4 +26,17 @@ public final class SessionUser extends User {
         displayName = name.isEmpty() ? email : name;
         role = account.getRole();
     }
+
+    SessionUser withRole(UserRole role) {
+        return new SessionUser(this, role);
+    }
+
+    private SessionUser(SessionUser existing, UserRole role) {
+        super(existing.getUsername(), "", existing.isEnabled(), true, true, true,
+                AuthorityUtils.createAuthorityList("ROLE_" + role.name()));
+        eraseCredentials();
+        id = existing.id;
+        displayName = existing.displayName;
+        this.role = role;
+    }
 }

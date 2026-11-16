@@ -4,6 +4,7 @@ import com.easleyjs.membership.entity.MemberNote;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,12 @@ public interface MemberNoteRepository extends JpaRepository<MemberNote,Long> {
             Long memberNumber,
             Pageable pageable
     );
+
+    @Modifying
+    @Query("""
+            delete from MemberNote n
+            where n.id = :noteId
+              and n.member.id in (select m.id from Member m where m.memberNumber = :memberNumber)
+            """)
+    int deleteMemberNote(@Param("memberNumber") Long memberNumber, @Param("noteId") Long noteId);
 }

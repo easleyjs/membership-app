@@ -74,4 +74,11 @@ public class MemberNoteService {
                 .map(MemberNoteResponse::from);
     }
 
+    @Transactional
+    public void deleteMemberNote(Long memberNumber, Long noteId) {
+        if (memberNoteRepository.deleteMemberNote(memberNumber, noteId) == 0) {
+            throw new ResourceNotFoundException("Note " + noteId + " not found for member " + memberNumber + ".");
+        }
+    }
+
 }

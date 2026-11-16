@@ -38,11 +38,19 @@ window.App = window.App || {};
   // ];
 
   let members = [];
+  let entities = [];
+  let section = "members";
+  const sections = {
+    members: { label: "Members", singular: "member", search: "Name, member number, or email" },
+    users: { label: "Users", singular: "user", search: "User name, email, or role" },
+    events: { label: "Events", singular: "event", search: "Event name, location, or status" },
+  };
   let isLoading = true;
   let loadError = null;
   let hasLoadedOnce = false;
   let loadVersion = 0;
   let checkIns = [];
+  let checkedInFilterTimer;
   let eventNames = new Map();
 
   let activeFilter = "all";
@@ -56,6 +64,8 @@ window.App = window.App || {};
       id: raw.memberNumber,
       memberId: raw.id,
       name: `${raw.firstName || ""} ${raw.lastName || ""}`.trim(),
+      firstName: raw.firstName,
+      lastName: raw.lastName,
       status: (raw.status || "").toLowerCase(),
       email: raw.email || "",
       role: role?.toLowerCase(),
@@ -71,15 +81,35 @@ window.App = window.App || {};
 
     try {
       if (mode === "admin") {
-        const [memberData, userData] = await Promise.all([
+        if (section === "events") {
+          const events = await App.api.getEvents();
+          if (version === loadVersion) entities = events;
+          return;
+        }
+        const [memberData, userData, events] = await Promise.all([
           App.api.getMembers(),
           App.api.getUsers(),
+          section === "members" ? App.api.getEvents().catch(() => []) : [],
         ]);
         if (version !== loadVersion) return;
         const memberList = Array.isArray(memberData) ? memberData : memberData?.members || [];
         const users = Array.isArray(userData) ? userData : userData?.users || [];
+        if (section === "users") {
+          const membersById = new Map(memberList.map((member) => [member.id, member]));
+          entities = users.map((user) => {
+            const member = membersById.get(user.memberId);
+            return {
+              ...user,
+              name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+              email: member?.email || "",
+              memberNumber: member?.memberNumber,
+            };
+          });
+          return;
+        }
         const rolesByMemberId = new Map(users.map((user) => [user.memberId, user.role]));
         members = memberList.map((member) => normalizeMember(member, rolesByMemberId.get(member.id)));
+        rememberEvents(events);
       } else {
         const [memberResult, eventResult, checkInResult] = await Promise.allSettled([
           App.api.getMembers(),
@@ -97,6 +127,7 @@ window.App = window.App || {};
       if (version !== loadVersion) return;
       loadError = err.message || "Couldn't load data.";
       members = [];
+      entities = [];
     } finally {
       if (version === loadVersion) {
         isLoading = false;
@@ -108,9 +139,15 @@ window.App = window.App || {};
   function selectFilter(filter) {
     activeFilter = filter;
     currentPage = 1;
-    document.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("active", chip.dataset.filter === filter);
+    document.querySelectorAll("#chips [data-filter]").forEach((chip) => {
+      const selected = chip.dataset.filter === filter;
+      chip.classList.toggle("active", selected);
+      chip.setAttribute("aria-pressed", String(selected));
     });
+  }
+
+  function rememberEvents(events) {
+    eventNames = new Map(events.map(({ id, name }) => [id, name]));
   }
 
   function updateDoorFilters(eventResult, checkInResult) {
@@ -118,15 +155,16 @@ window.App = window.App || {};
     const checkedInFilter = document.getElementById("checkedInFilter");
     const status = document.getElementById("doorDataStatus");
     const previousEvent = select.value;
-    const events = eventResult.value ?? [];
-    eventNames = new Map(events.map(({ id, name }) => [id, name]));
+    const allEvents = eventResult.value ?? [];
+    rememberEvents(allEvents);
+    const events = allEvents.filter(({ status }) => status === "ACTIVE");
     const eventError = eventResult.status === "rejected";
     const checkInError = checkInResult.status === "rejected";
 
     select.replaceChildren(...events.map(({ id, name }) => new Option(name, String(id))));
     if (events.some(({ id }) => String(id) === previousEvent)) select.value = previousEvent;
     if (!events.length) {
-      select.add(new Option(eventError ? "Events unavailable" : "No events", ""));
+      select.add(new Option(eventError ? "Events unavailable" : "No active events", ""));
     }
     select.disabled = !events.length;
     checkIns = checkInResult.value ?? [];
@@ -165,6 +203,19 @@ window.App = window.App || {};
         && String(member.id).startsWith(query.replace(/^#/, "")));
   }
 
+  function matchesUserFilter(user) {
+    switch (activeFilter) {
+      case "admin":
+      case "staff":
+        return user.role?.toLowerCase() === activeFilter;
+      case "active":
+      case "inactive":
+        return user.enabled === (activeFilter === "active");
+      default:
+        return true;
+    }
+  }
+
   function statusLabel(status) {
     if (status === "banned") return "Banned";
     return status === "active" ? "Active" : "Inactive";
@@ -172,6 +223,15 @@ window.App = window.App || {};
 
   let activeMember = null;
   let detailTrigger = null;
+  const pendingBans = new Set();
+
+  function renderMemberStatus(member) {
+    document.getElementById("modalStatus").className = `badge badge-status is-${member.status}`;
+    document.getElementById("modalStatusText").textContent = statusLabel(member.status).toUpperCase();
+    const ban = document.getElementById("modalBanBtn");
+    ban.textContent = member.status === "banned" ? "Unban" : "Ban";
+    ban.disabled = pendingBans.has(member.id);
+  }
 
   function openDetail(member, trigger) {
     activeMember = member;
@@ -180,39 +240,66 @@ window.App = window.App || {};
     if (document.activeElement === search) search.blur();
 
     const overlay = document.getElementById("memberModalOverlay");
-    const avatar = document.getElementById("modalAvatar");
     const name = document.getElementById("modalName");
     const memberNumber = document.getElementById("modalMemberNumber");
-    const status = document.getElementById("modalStatus");
-    const statusText = document.getElementById("modalStatusText");
     const email = document.getElementById("modalEmail");
-    const suspendBtn = document.getElementById("modalSuspendBtn");
     const reissueBtn = document.getElementById("modalReissueBtn");
 
-    avatar.textContent = initials(member.name);
     name.textContent = member.name || "—";
     memberNumber.textContent = `Member #${member.id}`;
-    status.className = `badge badge-status is-${member.status}`;
-    statusText.textContent = statusLabel(member.status).toUpperCase();
+    renderMemberStatus(member);
     email.textContent = member.email || "—";
 
-    const isActive = member.status === "active";
-    suspendBtn.textContent = isActive ? "Suspend" : "Reactivate";
-    suspendBtn.classList.toggle("is-reactivate", !isActive);
-    suspendBtn.disabled = false;
+    document.getElementById("modalBanFeedback").hidden = true;
     reissueBtn.disabled = false;
     reissueBtn.textContent = "Reissue QR";
-    if (mode === "door") {
-      const eventId = document.getElementById("doorEvent").value;
-      App.door.openDetail(member, eventNames, eventId ? Number(eventId) : null, (checkIn, isCurrentDetail) => {
+    const eventId = mode === "door" ? document.getElementById("doorEvent").value : "";
+    App.door.openDetail(member, eventNames, eventId ? Number(eventId) : null, {
+      mode,
+      onCheckIn(checkIn, isCurrentDetail) {
         if (!checkIns.some(({ id }) => id === checkIn.id)) checkIns.push(checkIn);
         if (mode === "door" && activeFilter === "checked-in") render();
-        if (isCurrentDetail) closeDetail();
-      });
-    }
+        if (isCurrentDetail && mode === "door") closeDetail();
+      },
+    });
 
     overlay.classList.add("open");
     document.getElementById("modalCloseBtn").focus({ preventScroll: true });
+  }
+
+  function updateSectionControls() {
+    const config = sections[section];
+    const search = document.getElementById("search");
+    search.placeholder = config.search;
+    search.setAttribute("aria-label", `Search ${config.label.toLowerCase()} by ${config.search.toLowerCase()}`);
+    const add = document.getElementById("addBtn");
+    add.title = `Add ${config.singular}`;
+    add.setAttribute("aria-label", add.title);
+    const chips = document.getElementById("chips");
+    const isUsers = section === "users";
+    chips.hidden = section === "events";
+    chips.querySelector('[data-filter="banned"]').hidden = section !== "members";
+    chips.querySelector('[data-filter="active"]').textContent = isUsers ? "Enabled" : "Active";
+    chips.querySelector('[data-filter="inactive"]').textContent = isUsers ? "Disabled" : "Inactive";
+    document.querySelectorAll("[data-section]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.section === section));
+    });
+  }
+
+  function resetSearch() {
+    searchTerm = "";
+    document.getElementById("search").value = "";
+    document.getElementById("clearSearch").classList.remove("visible");
+  }
+
+  function selectSection(next) {
+    if (next === section) return;
+    closeDetail();
+    section = next;
+    resetSearch();
+    selectFilter("all");
+    updateSectionControls();
+    loadData();
   }
 
   function closeDetail() {
@@ -244,6 +331,12 @@ window.App = window.App || {};
     const title = document.querySelector(".header-top h1");
 
     const isDoor = mode === "door";
+    if (isDoor && section !== "members") {
+      section = "members";
+      resetSearch();
+      selectFilter("all");
+    }
+    updateSectionControls();
 
     body.classList.toggle("door-mode", isDoor);
     chips.classList.toggle("door-mode", isDoor);
@@ -279,40 +372,51 @@ window.App = window.App || {};
     const prevPage = document.getElementById("prevPage");
     const nextPage = document.getElementById("nextPage");
     if (!list) return; // members view isn't on this page
+    clearTimeout(checkedInFilterTimer);
+    const { label } = sections[section];
 
     if (isLoading) {
       list.innerHTML = "";
-      empty.textContent = "Loading members…";
+      empty.textContent = `Loading ${label.toLowerCase()}…`;
       empty.style.display = "block";
       pagination.style.display = "none";
-      heading.textContent = "Members";
+      heading.textContent = label;
       return;
     }
 
     if (loadError) {
       list.innerHTML = "";
-      empty.textContent = `Couldn't load members: ${loadError}`;
+      empty.textContent = `Couldn't load ${label.toLowerCase()}: ${loadError}`;
       empty.style.display = "block";
       pagination.style.display = "none";
-      heading.textContent = "Members";
+      heading.textContent = label;
       return;
     }
 
     const eventId = document.getElementById("doorEvent").value;
     const checkedInMembers = new Set();
     if (activeFilter === "checked-in" && eventId) {
-      for (const checkIn of checkIns) {
-        if (String(checkIn.eventId) === eventId) checkedInMembers.add(checkIn.memberId);
-      }
+      const eventCheckIns = checkIns.filter((checkIn) => String(checkIn.eventId) === eventId);
+      const { entries, timer } = App.door.currentCheckIns(eventCheckIns, render);
+      checkedInFilterTimer = timer;
+      for (const { memberId } of entries) checkedInMembers.add(memberId);
     }
     const query = searchTerm.trim().toLowerCase();
-    const filtered = members.filter((m) => matchesFilter(m, checkedInMembers) && matchesSearch(m, query));
+    const isUsers = section === "users";
+    const filtered = section === "members"
+      ? members.filter((m) => matchesFilter(m, checkedInMembers) && matchesSearch(m, query))
+      : entities.filter((record) => {
+        if (isUsers && !matchesUserFilter(record)) return false;
+        const fields = isUsers
+          ? [record.name, record.email, record.role] : [record.name, record.location, record.status];
+        return fields.some((field) => field?.toLowerCase().includes(query));
+      });
 
-    heading.textContent = `Members (${filtered.length})`;
+    heading.textContent = `${label} (${filtered.length})`;
     list.innerHTML = "";
 
     if (filtered.length === 0) {
-      empty.textContent = "No members match this filter.";
+      empty.textContent = `No ${label.toLowerCase()} match.`;
       empty.style.display = "block";
       pagination.style.display = "none";
       return;
@@ -332,6 +436,23 @@ window.App = window.App || {};
     nextPage.disabled = currentPage >= totalPages;
 
     pageItems.forEach((m) => {
+      if (section !== "members") {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "card editor-card";
+        const title = document.createElement("span");
+        title.className = "card-name";
+        title.textContent = m.name;
+        const summary = document.createElement("span");
+        summary.className = "modal-entry-meta";
+        summary.textContent = section === "users"
+          ? [m.email, m.role, m.enabled ? "Enabled" : "Disabled"].filter(Boolean).join(" · ")
+          : [m.location, m.status, m.startsAt && new Date(m.startsAt).toLocaleString()].filter(Boolean).join(" · ");
+        card.append(title, summary);
+        card.addEventListener("click", () => App.admin.openEditor(section, m, loadData));
+        list.appendChild(card);
+        return;
+      }
       const card = document.createElement("div");
       card.className = "card";
       card.tabIndex = 0;
@@ -389,7 +510,7 @@ window.App = window.App || {};
     const memberModalOverlay = document.getElementById("memberModalOverlay");
     const modalCloseBtn = document.getElementById("modalCloseBtn");
     const modalEditBtn = document.getElementById("modalEditBtn");
-    const modalSuspendBtn = document.getElementById("modalSuspendBtn");
+    const modalBanBtn = document.getElementById("modalBanBtn");
     const modalReissueBtn = document.getElementById("modalReissueBtn");
 
     if (!chips) return; // members view isn't on this page
@@ -440,9 +561,17 @@ window.App = window.App || {};
       render();
     });
 
+    App.admin.bindEditor();
+    document.getElementById("adminSections").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-section]");
+      if (mode === "admin" && button) selectSection(button.dataset.section);
+    });
     addBtn.addEventListener("click", () => {
-      // Placeholder — open an "add member" form here
-      console.log("Add member clicked");
+      if (mode === "admin") App.admin.openEditor(section, null, () => {
+        resetSearch();
+        selectFilter("all");
+        loadData();
+      });
     });
 
     // User menu dropdown
@@ -508,25 +637,39 @@ window.App = window.App || {};
     });
 
     modalEditBtn.addEventListener("click", () => {
-      // Placeholder — open an edit form for activeMember here
-      console.log("Edit clicked:", activeMember?.id);
+      if (mode !== "admin" || !activeMember) return;
+      const member = activeMember;
+      closeDetail();
+      App.admin.openEditor("members", member, loadData);
     });
 
-    modalSuspendBtn.addEventListener("click", async () => {
-      if (!activeMember) return;
-      const nextStatus = activeMember.status === "active" ? "INACTIVE" : "ACTIVE";
-
-      modalSuspendBtn.disabled = true;
-      modalSuspendBtn.textContent = "Updating…";
-
+    modalBanBtn.addEventListener("click", async () => {
+      const member = activeMember;
+      if (mode !== "admin" || !member || modalBanBtn.disabled) return;
+      const banning = member.status !== "banned";
+      const message = document.getElementById("modalBanFeedback");
+      pendingBans.add(member.id);
+      modalBanBtn.disabled = true;
+      message.hidden = true;
       try {
-        await App.admin.changeStatus(activeMember.id, nextStatus);
-        closeDetail();
-        loadData(); // refresh the list so the card reflects the new status
+        const updated = await App.api.setMemberBanned(member.id, banning);
+        member.status = updated.status.toLowerCase();
+        const listed = members.find(({ id }) => id === member.id);
+        if (listed) listed.status = member.status;
+        if (!isLoading && section === "members") render();
+        if (mode === "admin" && activeMember?.id === member.id) {
+          activeMember.status = member.status;
+          message.textContent = banning ? "Member banned." : "Member unbanned.";
+          message.hidden = false;
+        }
       } catch (err) {
-        modalSuspendBtn.disabled = false;
-        modalSuspendBtn.textContent = activeMember.status === "active" ? "Suspend" : "Reactivate";
-        alert(`Couldn't update status: ${err.message}`);
+        if (mode === "admin" && activeMember?.id === member.id) {
+          message.textContent = `Couldn't update ban: ${err.message}`;
+          message.hidden = false;
+        }
+      } finally {
+        pendingBans.delete(member.id);
+        if (mode === "admin" && activeMember?.id === member.id) renderMemberStatus(activeMember);
       }
     });
 

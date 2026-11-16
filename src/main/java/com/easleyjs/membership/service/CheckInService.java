@@ -5,6 +5,7 @@ import com.easleyjs.membership.dto.CheckInResponse;
 import com.easleyjs.membership.entity.AdmissionType;
 import com.easleyjs.membership.entity.AppUser;
 import com.easleyjs.membership.entity.CheckIn;
+import com.easleyjs.membership.entity.CheckInMethod;
 import com.easleyjs.membership.entity.Event;
 import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.entity.MemberStatus;
@@ -42,6 +43,7 @@ public class CheckInService {
     private static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(5);
     // How many days old can a check-in timestamp be
     private static final Duration MAX_OFFLINE_AGE = Duration.ofDays(7);
+    private static final Duration CHECK_IN_WINDOW = Duration.ofHours(12);
 
     public CheckInService(
             CheckInRepository checkInRepository,
@@ -66,7 +68,21 @@ public class CheckInService {
             UUID authenticatedStaffId
     ) {
         AppUser staff = findStaff(authenticatedStaffId, request.staffMemberId());
+        return saveCheckIn(request, staff, false);
+    }
 
+    @Transactional
+    public CheckInResponse createCompCheckIn(CheckInCreateRequest request, UUID authenticatedStaffId) {
+        AppUser admin = findStaff(authenticatedStaffId, request.staffMemberId());
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new AccessDeniedException("An administrator account is required to comp a check-in.");
+        }
+        var comp = new CheckInCreateRequest(request.id(), request.memberId(), null, CheckInMethod.MANUAL,
+                request.createdAt(), null, true);
+        return saveCheckIn(comp, admin, true);
+    }
+
+    private CheckInResponse saveCheckIn(CheckInCreateRequest request, AppUser staff, boolean comp) {
         Member member = memberRepository.findByIdForUpdate(request.memberId())
                 .orElseThrow(() -> new MemberNotFoundException(
                         "Member not found: " + request.memberId()
@@ -76,14 +92,14 @@ public class CheckInService {
         Instant createdAt = request.createdAt().truncatedTo(ChronoUnit.MILLIS);
         Instant receivedAt = Instant.now();
 
-        CheckIn existingCheckIn = validateExistingCheckIn(request, authenticatedStaffId, createdAt);
+        CheckIn existingCheckIn = validateExistingCheckIn(request, staff.getId(), createdAt, comp);
         if (existingCheckIn != null) {
             return CheckInResponse.from(existingCheckIn);
         }
 
         boolean overrideMembership = request.requestsMembershipOverride();
         AdmissionType admissionType = validateCheckIn(member, request.eventId(), createdAt, receivedAt,
-                overrideMembership);
+                overrideMembership, comp);
 
         CheckIn checkIn = new CheckIn();
         checkIn.setId(request.id());
@@ -103,10 +119,10 @@ public class CheckInService {
     }
 
     private AdmissionType validateCheckIn(Member member, Long eventId, Instant createdAt, Instant receivedAt,
-                                          boolean overrideMembership) {
+                                          boolean overrideMembership, boolean comp) {
         validateMemberStatus(member);
         validateCheckInTime(createdAt, receivedAt);
-        AdmissionType admissionType = AdmissionType.STANDARD;
+        AdmissionType admissionType = comp ? AdmissionType.MEMBERSHIP_OVERRIDE : AdmissionType.STANDARD;
         if (eventId != null) {
             Event event = eventRepository.findById(eventId)
                     .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
@@ -136,7 +152,7 @@ public class CheckInService {
                 : "An active membership is required for this event.");
     }
 
-    private CheckIn validateExistingCheckIn(CheckInCreateRequest request, UUID staffId, Instant createdAt) {
+    private CheckIn validateExistingCheckIn(CheckInCreateRequest request, UUID staffId, Instant createdAt, boolean comp) {
         CheckIn existingCheckIn = checkInRepository.findById(request.id())
                 .orElse(null);
         if (existingCheckIn == null) {
@@ -151,7 +167,9 @@ public class CheckInService {
                         && existingCheckIn.getCreatedAt().equals(createdAt)
                         && Objects.equals(existingCheckIn.getEventId(), request.eventId());
 
-        if (!sameCheckIn) {
+        boolean existingComp = existingCheckIn.getEventId() == null
+                && existingCheckIn.getAdmissionType() == AdmissionType.MEMBERSHIP_OVERRIDE;
+        if (!sameCheckIn || comp != existingComp) {
             throw new CheckInConflictException(
                     "Check-in ID already exists with different details"
             );
@@ -182,13 +200,13 @@ public class CheckInService {
                 checkInRepository
                         .existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
                                 memberId,
-                                createdAt.minus(8, ChronoUnit.HOURS),
-                                createdAt.plus(8, ChronoUnit.HOURS)
+                                createdAt.minus(CHECK_IN_WINDOW),
+                                createdAt.plus(CHECK_IN_WINDOW)
                         );
 
         if (duplicate) {
             throw new DuplicateCheckInException(
-                    "Member has already checked in within 8 hours of this check-in"
+                    "Member has already checked in within " + CHECK_IN_WINDOW.toHours() + " hours of this check-in"
             );
         }
     }

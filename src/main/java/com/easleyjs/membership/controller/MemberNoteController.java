@@ -52,4 +52,10 @@ public class MemberNoteController {
                 .body(createdNote);
     }
 
+    @DeleteMapping("/{noteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMemberNote(@PathVariable Long memberNumber, @PathVariable Long noteId) {
+        noteService.deleteMemberNote(memberNumber, noteId);
+    }
+
 }

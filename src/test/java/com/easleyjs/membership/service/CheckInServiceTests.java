@@ -65,6 +65,31 @@ class CheckInServiceTests {
     private final AppUser staff = mock(AppUser.class);
 
     @Test
+    void adminCompRecordsMembershipOverrideAndRetainsRetrySemantics() {
+        stubNewCheckIn(MemberStatus.ACTIVE);
+        when(staff.getRole()).thenReturn(UserRole.ADMIN);
+        Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        var request = new CheckInCreateRequest(checkInId, memberId, null, CheckInMethod.MANUAL, createdAt, null, true);
+
+        var response = service.createCompCheckIn(request, staffId);
+        assertEquals(AdmissionType.MEMBERSHIP_OVERRIDE, response.admissionType());
+        var persisted = ArgumentCaptor.forClass(CheckIn.class);
+        verify(entityManager).persist(persisted.capture());
+        when(checkIns.findById(checkInId)).thenReturn(Optional.of(persisted.getValue()));
+
+        assertEquals(response, service.createCompCheckIn(request, staffId));
+        assertThrows(CheckInConflictException.class, () -> service.createCheckIn(request, staffId));
+        verifyNoInteractions(events, memberships);
+    }
+
+    @Test
+    void staffCannotCompCheckIn() {
+        stubStaff();
+        assertThrows(AccessDeniedException.class, () -> service.createCompCheckIn(requestAt(Instant.now()), staffId));
+        verifyNoInteractions(members, entityManager);
+    }
+
+    @Test
     void matchingRetryReturnsExistingCheckInEvenAfterOfflineWindowExpires() {
         Instant createdAt = Instant.parse("2020-01-01T12:00:00.123456Z");
         CheckIn existing = stubExistingCheckIn(createdAt.truncatedTo(ChronoUnit.MILLIS));
@@ -116,12 +141,12 @@ class CheckInServiceTests {
     }
 
     @Test
-    void checkInForSameMemberWithinEightHoursIsRejected() {
+    void checkInForSameMemberWithinTwelveHoursIsRejected() {
         stubNewCheckIn(MemberStatus.ACTIVE);
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         CheckInCreateRequest request = requestAt(createdAt);
         when(checkIns.existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
-                memberId, createdAt.minus(8, ChronoUnit.HOURS), createdAt.plus(8, ChronoUnit.HOURS)))
+                memberId, createdAt.minus(12, ChronoUnit.HOURS), createdAt.plus(12, ChronoUnit.HOURS)))
                 .thenReturn(true);
 
         assertThrows(DuplicateCheckInException.class, () -> service.createCheckIn(request, staffId));
@@ -287,7 +312,7 @@ class CheckInServiceTests {
         stubEvent(true, false);
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         when(checkIns.existsByMember_IdAndCreatedAtGreaterThanAndCreatedAtLessThan(
-                memberId, createdAt.minus(8, ChronoUnit.HOURS), createdAt.plus(8, ChronoUnit.HOURS)))
+                memberId, createdAt.minus(12, ChronoUnit.HOURS), createdAt.plus(12, ChronoUnit.HOURS)))
                 .thenReturn(true);
 
         assertThrows(DuplicateCheckInException.class,

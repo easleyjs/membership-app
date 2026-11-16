@@ -76,6 +76,20 @@ window.App = window.App || {};
     return data;
   }
 
+  function manualCheckIn(path, memberId, eventId, overrideMembership) {
+    return request(path, {
+      method: "POST",
+      body: {
+        id: createCheckInId(),
+        memberId,
+        eventId,
+        overrideMembership,
+        method: "MANUAL",
+        createdAt: new Date().toISOString(),
+      },
+    });
+  }
+
   const api = {
     ApiError,
 
@@ -101,6 +115,14 @@ window.App = window.App || {};
     getMember(id) {
       return request(`/members/${id}`, { method: "GET" });
     },
+    saveMember(fields, memberNumber) {
+      return memberNumber == null
+        ? request("/members", { method: "POST", body: fields })
+        : request(`/members/${memberNumber}/update`, { method: "PUT", body: fields });
+    },
+    setMemberBanned(memberNumber, banned) {
+      return request(`/members/${memberNumber}/${banned ? "ban" : "unban"}`, { method: "PUT" });
+    },
     getMemberships(memberNumber, page) {
       return request(`/members/${memberNumber}/memberships?page=${page}`);
     },
@@ -110,6 +132,9 @@ window.App = window.App || {};
     addMemberNote(memberNumber, createdById, content) {
       return request(`/members/${memberNumber}/notes`, { method: "POST", body: { createdById, content } });
     },
+    deleteMemberNote(memberNumber, noteId) {
+      return request(`/members/${memberNumber}/notes/${noteId}`, { method: "DELETE" });
+    },
 
     // --- Users (Admin view — includes role; AppUser 1:1 Member) ---
     getUsers(params = {}) {
@@ -118,6 +143,15 @@ window.App = window.App || {};
     },
     getUser(id) {
       return request(`/users/${id}`, { method: "GET" });
+    },
+    createUser(fields) {
+      return request("/users", { method: "POST", body: fields });
+    },
+    searchEligibleMembers(query) {
+      return request(`/users/eligible-members?${new URLSearchParams({ query })}`);
+    },
+    updateUser(id, fields) {
+      return request(`/users/${id}`, { method: "PATCH", body: fields });
     },
 
     // --- Admin actions ---
@@ -135,6 +169,14 @@ window.App = window.App || {};
     getEvents() {
       return request("/events");
     },
+    saveEvent(fields, id) {
+      return id == null
+        ? request("/events", { method: "POST", body: fields })
+        : request(`/events/${id}`, { method: "PUT", body: fields });
+    },
+    deactivateEvent(id) {
+      return request(`/events/${id}/disable`, { method: "PATCH" });
+    },
     getCheckIns(memberId) {
       return request(memberId ? `/checkin/${memberId}` : "/checkin");
     },
@@ -143,17 +185,10 @@ window.App = window.App || {};
     },
     // Manual check-in from the member card (scan failed / no phone, etc).
     checkInManual(memberId, eventId, overrideMembership) {
-      return request("/checkin", {
-        method: "POST",
-        body: {
-          id: createCheckInId(),
-          memberId,
-          eventId,
-          overrideMembership,
-          method: "MANUAL",
-          createdAt: new Date().toISOString(),
-        },
-      });
+      return manualCheckIn("/checkin", memberId, eventId, overrideMembership);
+    },
+    compCheckIn(memberId) {
+      return manualCheckIn("/checkin/comp", memberId, null, true);
     },
   };
 

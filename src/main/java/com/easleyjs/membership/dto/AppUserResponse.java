@@ -11,7 +11,8 @@ public record AppUserResponse(
         String firstName,
         String lastName,
         UserRole role,
-        UUID memberId
+        UUID memberId,
+        boolean enabled
 ) {
     public static AppUserResponse from(AppUser appUser) {
         Member member = appUser.getMember();
@@ -20,7 +21,8 @@ public record AppUserResponse(
                 member.getFirstName(),
                 member.getLastName(),
                 appUser.getRole(),
-                member.getId()
+                member.getId(),
+                appUser.isEnabled()
         );
     }
 }

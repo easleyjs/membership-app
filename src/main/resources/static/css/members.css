@@ -312,6 +312,11 @@ body.door-mode .admin-only{
   border-color: #384054;
 }
 
+body:not(.door-mode) .chips .chip,
+.admin-sections .chip{
+  font-size: 14.85px;
+}
+
 .chip.active{
   background: var(--accent);
   border-color: var(--accent);
@@ -379,6 +384,16 @@ main{
 .card:hover{
   background: var(--panel-hover);
   border-color: #313a4a;
+}
+
+.editor-card{
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .card:active{
@@ -647,35 +662,99 @@ main{
   outline-offset: 2px;
 }
 
-.modal-avatar{
-  width: 60px;
-  height: 60px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  background: #232a35;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 19px;
-  font-weight: 600;
-}
-
 .modal-name{
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 4px;
 }
 
-.door-mode .modal-name{
+.member-detail .modal-name,
+.admin-editor .modal-name{
   padding-inline: 44px;
   overflow-wrap: anywhere;
 }
 
-.door-mode .modal{
+.member-detail,
+.admin-editor{
   max-width: 480px;
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
+}
+
+.admin-sections{
+  margin-bottom: 12px;
+}
+
+#chips[hidden]{
+  display: none;
+}
+
+.admin-editor{
+  width: calc(100% - 40px);
+  color: var(--text);
+}
+
+.admin-editor::backdrop,
+.note-delete-dialog::backdrop{
+  background: rgba(6,8,11,0.7);
+}
+
+.editor-fields{
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.editor-fields label:not([hidden]){
+  display: grid;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.editor-fields input:not([type="checkbox"]),
+.editor-fields select{
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  color-scheme: dark;
+}
+
+.editor-fields .editor-check{
+  display: flex;
+  align-items: center;
+}
+
+.member-matches:not([hidden]){
+  display: grid;
+  gap: 5px;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.member-matches button{
+  padding: 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.member-matches button:hover,
+.member-matches button:focus-visible{
+  border-color: var(--focus);
+}
+
+#adminEditorFeedback{
+  margin-bottom: 12px;
 }
 
 .modal-value{
@@ -774,6 +853,49 @@ main{
   overflow-wrap: anywhere;
 }
 
+.note-with-delete{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+}
+
+.note-with-delete .modal-entry-content{
+  grid-column: 1;
+}
+
+.note-delete{
+  grid-area: 1 / 2 / span 2;
+  align-self: center;
+  justify-self: end;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background:
+    linear-gradient(45deg, transparent calc(50% - 1.5px), currentColor calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 18px 18px no-repeat,
+    linear-gradient(-45deg, transparent calc(50% - 1.5px), currentColor calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)) center / 18px 18px no-repeat;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.note-delete:hover{
+  color: var(--focus);
+}
+
+.note-delete:focus-visible{
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.note-delete-dialog{
+  width: calc(100% - 40px);
+  color: var(--text);
+}
+
+.note-delete-dialog .modal-form-actions{
+  margin-top: 16px;
+}
+
 .modal-entry-meta{
   display: block;
   margin: 0 0 4px;
@@ -866,15 +988,6 @@ main{
 
 .modal-btn-danger:hover{
   background: rgba(226,114,107,0.1);
-}
-
-.modal-btn-danger.is-reactivate{
-  border-color: rgba(107,208,138,0.4);
-  color: var(--ok);
-}
-
-.modal-btn-danger.is-reactivate:hover{
-  background: rgba(107,208,138,0.1);
 }
 
 .modal-btn-accent{
