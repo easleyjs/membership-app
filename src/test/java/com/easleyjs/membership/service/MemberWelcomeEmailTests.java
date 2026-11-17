@@ -53,7 +53,7 @@ class MemberWelcomeEmailTests {
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
         context.registerBean(MemberService.class, () -> new MemberService(members, mock(MemberNoteRepository.class),
                 mock(MembershipService.class), context));
-        context.registerBean(MailService.class, () -> new MailService(mailSender, members, qrCodes));
+        context.registerBean(MailService.class, () -> new MailService(mailSender, members, qrCodes, mock(ResendClient.class)));
         context.refresh();
         memberService = context.getBean(MemberService.class);
     }

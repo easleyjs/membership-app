@@ -5,6 +5,7 @@ import com.easleyjs.membership.exception.GlobalExceptionHandler;
 import com.easleyjs.membership.repository.MemberRepository;
 import com.easleyjs.membership.service.MailService;
 import com.easleyjs.membership.service.QrCodeService;
+import com.easleyjs.membership.service.ResendClient;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
@@ -39,7 +40,7 @@ class MailControllerTests {
             sentMessages.addAll(List.of(messages));
         }
     };
-    private final MailService mailService = new MailService(mailSender, members, new QrCodeService());
+    private final MailService mailService = new MailService(mailSender, members, new QrCodeService(), mock(ResendClient.class));
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new MailController(mailService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();

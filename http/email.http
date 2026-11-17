@@ -3,9 +3,12 @@
 # Set DEV_ADMIN_PASSWORD in http-client.private.env.json or in IntelliJ's process environment.
 # Change username below if you are signing in with a different account.
 # Replace memberId with the UUID (id) of an existing test member whose inbox can receive the welcome email.
+# Set emailPath to /api/email/resend to test the Resend API.
+#@emailPath = /api/email
 @baseUrl = http://localhost:8080
 @username = josh@example.com
 @memberId = d8c34866-edef-4078-8867-4e6100b7dcb0
+@emailPath = /api/email/resend
 
 ### 1. Get a CSRF token for login
 < {%
@@ -66,11 +69,11 @@ Accept: application/json
 %}
 
 ### 4. Send the welcome email to the member's email address
-POST {{baseUrl}}/api/email/{{memberId}}
+POST {{baseUrl}}{{emailPath}}/{{memberId}}
 X-CSRF-TOKEN: {{emailTestSendCsrf}}
 
 > {%
     if (response.status !== 200) {
-        throw new Error("Expected HTTP 200 for the email POST, got " + response.status);
+        throw new Error("Email POST returned HTTP " + response.status + (response.body?.message ? ": " + response.body.message : ""));
     }
 %}
