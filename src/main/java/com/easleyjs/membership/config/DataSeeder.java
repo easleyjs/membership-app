@@ -41,7 +41,7 @@ public class DataSeeder {
                         new MemberCreateRequest("Sascha", "Konietzko", "ultraheavybeat@kmfdm.com"),
                         new MemberCreateRequest("Dave", "Gahan", "violator@depechemode.com")
                 );
-                members.forEach(memberService::createMember);
+                members.forEach(memberService::createSeedMember);
             }
 
             String adminEmail = "josh@example.com";
@@ -55,7 +55,7 @@ public class DataSeeder {
             }
 
             Member adminMember = memberRepo.findByEmail(adminEmail).orElseGet(() -> {
-                var createdMember = memberService.createMember(new MemberCreateRequest("Josh", "Test", adminEmail));
+                var createdMember = memberService.createSeedMember(new MemberCreateRequest("Josh", "Test", adminEmail));
                 return memberRepo.findById(createdMember.id()).orElseThrow();
             });
             appUserRepo.save(new AppUser(adminMember, passwordEncoder.encode(rawPassword), UserRole.ADMIN));
