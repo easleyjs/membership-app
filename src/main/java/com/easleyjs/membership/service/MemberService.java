@@ -6,6 +6,7 @@ import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.repository.MemberNoteRepository;
 import com.easleyjs.membership.repository.MemberRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,11 +19,14 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final MemberNoteRepository memberNoteRepository;
     private final MembershipService membershipService;
+    private final ApplicationEventPublisher events;
 
-    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository, MembershipService membershipService) {
+    public MemberService(MemberRepository memberRepository, MemberNoteRepository memberNoteRepository,
+                         MembershipService membershipService, ApplicationEventPublisher events) {
         this.memberRepository = memberRepository;
         this.memberNoteRepository = memberNoteRepository;
         this.membershipService = membershipService;
+        this.events = events;
     }
 
     public List<MemberResponse> getAllMembers() {
@@ -53,6 +57,17 @@ public class MemberService {
 
     @Transactional
     public MemberResponse createMember(MemberCreateRequest memberRequest) {
+        Member member = saveMemberWithFreeMembership(memberRequest);
+        events.publishEvent(new MemberCreated(member));
+        return MemberResponse.from(member, 0);
+    }
+
+    @Transactional
+    public MemberResponse createSeedMember(MemberCreateRequest memberRequest) {
+        return MemberResponse.from(saveMemberWithFreeMembership(memberRequest), 0);
+    }
+
+    private Member saveMemberWithFreeMembership(MemberCreateRequest memberRequest) {
         Long memberNumber = memberRepository.getNextMemberNumber();
         String qrToken = UUID.randomUUID().toString();
 
@@ -65,14 +80,11 @@ public class MemberService {
         );
 
         Member savedMember = memberRepository.save(newMember);
-
-        // Give the new member a free membership, if they don't already have one
-        membershipService.ensureFreeMembership(newMember);
-
-        return MemberResponse.from(
-                savedMember, 0
-        );
+        membershipService.ensureFreeMembership(savedMember);
+        return savedMember;
     }
+
+    record MemberCreated(Member member) {}
 
     @Transactional
     public MemberUpdateResponse updateMember(

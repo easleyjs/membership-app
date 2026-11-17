@@ -1,12 +1,16 @@
 package com.easleyjs.membership.service;
 
+import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.repository.MemberRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.HtmlUtils;
 
@@ -16,6 +20,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 @Service
 public class MailService {
+    private static final Logger log = LoggerFactory.getLogger(MailService.class);
     private static final String QR_CONTENT_ID = "member-qr";
     private static final ClassPathResource WELCOME_TEMPLATE =
             new ClassPathResource("templates/email/welcome-to-outland.html");
@@ -33,6 +38,20 @@ public class MailService {
     public void sendMail(UUID memberId) {
         var member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberNotFoundException("Member not found: " + memberId));
+        sendWelcomeEmail(member);
+    }
+
+    @TransactionalEventListener
+    void sendWelcomeEmailAfterCommit(MemberService.MemberCreated event) {
+        Member member = event.member();
+        try {
+            sendWelcomeEmail(member);
+        } catch (RuntimeException failure) {
+            log.warn("Could not send welcome email for member {}", member.getId(), failure);
+        }
+    }
+
+    private void sendWelcomeEmail(Member member) {
         var qrPng = new ByteArrayResource(qrCodeService.generateQr(member.getId()));
         String firstName = member.getFirstName();
         String greeting = StringUtils.hasText(firstName)

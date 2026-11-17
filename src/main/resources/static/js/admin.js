@@ -205,17 +205,6 @@ window.App = window.App || {};
     }
   }
 
-  async function reissueQr(memberId) {
-    try {
-      const result = await App.api.reissueQr(memberId);
-      // TODO: display the new QR code to the admin
-      return result;
-    } catch (err) {
-      console.error("Failed to reissue QR code:", err.message);
-      throw err;
-    }
-  }
-
-  window.App.admin = { changeStatus, setRole, reissueQr, openEditor, bindEditor };
+  window.App.admin = { changeStatus, setRole, openEditor, bindEditor };
 
 })();

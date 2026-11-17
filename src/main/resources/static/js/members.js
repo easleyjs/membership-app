@@ -237,6 +237,7 @@ window.App = window.App || {};
   let activeMember = null;
   let detailTrigger = null;
   const pendingBans = new Set();
+  const pendingQrResends = new Set();
 
   function renderMemberStatus(member) {
     document.getElementById("modalStatus").className = `badge badge-status is-${member.status}`;
@@ -256,7 +257,7 @@ window.App = window.App || {};
     const name = document.getElementById("modalName");
     const memberNumber = document.getElementById("modalMemberNumber");
     const email = document.getElementById("modalEmail");
-    const reissueBtn = document.getElementById("modalReissueBtn");
+    const resendQrBtn = document.getElementById("modalResendQrBtn");
 
     name.textContent = member.name || "—";
     memberNumber.textContent = `Member #${member.id}`;
@@ -264,8 +265,9 @@ window.App = window.App || {};
     email.textContent = member.email || "—";
 
     document.getElementById("modalBanFeedback").hidden = true;
-    reissueBtn.disabled = false;
-    reissueBtn.textContent = "Reissue QR";
+    document.getElementById("modalResendQrFeedback").hidden = true;
+    resendQrBtn.disabled = pendingQrResends.has(member.memberId);
+    resendQrBtn.textContent = resendQrBtn.disabled ? "Sending…" : "Resend QR";
     const eventId = mode === "door" ? document.getElementById("doorEvent").value : "";
     App.door.openDetail(member, eventNames, eventId ? Number(eventId) : null, {
       mode,
@@ -525,7 +527,7 @@ window.App = window.App || {};
     const modalCloseBtn = document.getElementById("modalCloseBtn");
     const modalEditBtn = document.getElementById("modalEditBtn");
     const modalBanBtn = document.getElementById("modalBanBtn");
-    const modalReissueBtn = document.getElementById("modalReissueBtn");
+    const modalResendQrBtn = document.getElementById("modalResendQrBtn");
 
     if (!chips) return; // members view isn't on this page
 
@@ -689,23 +691,29 @@ window.App = window.App || {};
       }
     });
 
-    modalReissueBtn.addEventListener("click", async () => {
-      if (!activeMember) return;
+    modalResendQrBtn.addEventListener("click", async () => {
+      const memberId = activeMember?.memberId;
+      if (!memberId || pendingQrResends.has(memberId)) return;
+      const feedback = document.getElementById("modalResendQrFeedback");
+      pendingQrResends.add(memberId);
+      modalResendQrBtn.disabled = true;
+      modalResendQrBtn.textContent = "Sending…";
+      feedback.hidden = true;
 
-      modalReissueBtn.disabled = true;
-      modalReissueBtn.textContent = "Reissuing…";
-
+      let message;
       try {
-        await App.admin.reissueQr(activeMember.id);
-        modalReissueBtn.textContent = "Reissued ✓";
-        setTimeout(() => {
-          modalReissueBtn.disabled = false;
-          modalReissueBtn.textContent = "Reissue QR";
-        }, 1500);
+        await App.api.resendQr(memberId);
+        message = "QR email sent.";
       } catch (err) {
-        modalReissueBtn.disabled = false;
-        modalReissueBtn.textContent = "Reissue QR";
-        alert(`Couldn't reissue QR: ${err.message}`);
+        message = `Couldn't resend QR: ${err.message}`;
+      }
+
+      pendingQrResends.delete(memberId);
+      if (activeMember?.memberId === memberId) {
+        modalResendQrBtn.disabled = false;
+        modalResendQrBtn.textContent = "Resend QR";
+        feedback.textContent = message;
+        feedback.hidden = false;
       }
     });
   }
