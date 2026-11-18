@@ -1,0 +1,79 @@
+# Start the app with the dev or local Spring profile.
+# Select dev in the HTTP Client's Run with menu, then use Run All Requests in File.
+# Set DEV_ADMIN_PASSWORD in http-client.private.env.json or in IntelliJ's process environment.
+# Change username below if you are signing in with a different account.
+# Replace memberId with the UUID (id) of an existing test member whose inbox can receive the welcome email.
+# Set emailPath to /api/email/resend to test the Resend API.
+#@emailPath = /api/email
+@baseUrl = http://localhost:8080
+@username = josh@example.com
+@memberId = cb02f984-bb87-477c-b787-8de59a0f8ae8
+@emailPath = /api/email/resend
+
+### 1. Get a CSRF token for login
+< {%
+    client.global.clear("emailTestLoginCsrf");
+    client.global.clear("emailTestSignedIn");
+    client.global.clear("emailTestSendCsrf");
+%}
+GET {{baseUrl}}/api/auth/csrf
+Accept: application/json
+
+> {%
+    if (response.status !== 200 || !response.body?.token) {
+        throw new Error("Expected a CSRF token for login, got HTTP " + response.status);
+    }
+    client.global.set("emailTestLoginCsrf", response.body.token);
+%}
+
+### 2. Sign in and save the session in IntelliJ's cookie jar
+# @no-log
+< {%
+    client.global.clear("emailTestSignedIn");
+    client.global.clear("emailTestSendCsrf");
+    const password = request.environment.get("DEV_ADMIN_PASSWORD") || $env.DEV_ADMIN_PASSWORD;
+    if (!password) {
+        throw new Error("Select the dev HTTP Client environment or set DEV_ADMIN_PASSWORD in IntelliJ's process environment");
+    }
+    request.variables.set("emailTestUsername", encodeURIComponent(client.variables.file.get("username")));
+    request.variables.set("emailTestPassword", encodeURIComponent(password));
+%}
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/x-www-form-urlencoded
+X-CSRF-TOKEN: {{emailTestLoginCsrf}}
+
+username={{emailTestUsername}}&password={{emailTestPassword}}
+
+> {%
+    if (response.status !== 204) {
+        throw new Error("Expected HTTP 204 for login, got " + response.status);
+    }
+    client.global.set("emailTestSignedIn", "true");
+%}
+
+### 3. Get a fresh CSRF token after login
+< {%
+    client.global.clear("emailTestSendCsrf");
+    if (client.global.get("emailTestSignedIn") !== "true") {
+        throw new Error("Step 2 did not complete successfully. Check the login request in Services for the original error.");
+    }
+%}
+GET {{baseUrl}}/api/auth/csrf
+Accept: application/json
+
+> {%
+    if (response.status !== 200 || !response.body?.token) {
+        throw new Error("Expected a CSRF token for sending email, got HTTP " + response.status);
+    }
+    client.global.set("emailTestSendCsrf", response.body.token);
+%}
+
+### 4. Send the welcome email to the member's email address
+POST {{baseUrl}}{{emailPath}}/{{memberId}}
+X-CSRF-TOKEN: {{emailTestSendCsrf}}
+
+> {%
+    if (response.status !== 200) {
+        throw new Error("Email POST returned HTTP " + response.status + (response.body?.message ? ": " + response.body.message : ""));
+    }
+%}

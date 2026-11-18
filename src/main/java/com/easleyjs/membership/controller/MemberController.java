@@ -3,6 +3,7 @@ package com.easleyjs.membership.controller;
 import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.security.SessionUser;
 import com.easleyjs.membership.dto.*;
+import com.easleyjs.membership.service.MailService;
 import com.easleyjs.membership.service.MemberService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,15 +14,18 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/members")
 public class MemberController {
-    MemberService memberService;
+    private final MemberService memberService;
+    private final MailService mailService;
 
     @Autowired
-    public MemberController(MemberService memberService) {
+    public MemberController(MemberService memberService, MailService mailService) {
         this.memberService = memberService;
+        this.mailService = mailService;
     }
 
     @GetMapping("")
@@ -42,6 +46,12 @@ public class MemberController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(createdMember);
+    }
+
+    @PostMapping("/{memberId}/qr/resend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resendQr(@PathVariable UUID memberId) {
+        mailService.sendMail(memberId);
     }
 
     @PutMapping("/{memberNumber}/update")

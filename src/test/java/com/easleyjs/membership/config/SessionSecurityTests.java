@@ -21,6 +21,7 @@ import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.service.CheckInService;
 import com.easleyjs.membership.service.EventService;
+import com.easleyjs.membership.service.MailService;
 import com.easleyjs.membership.service.MemberNoteService;
 import com.easleyjs.membership.service.MemberService;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +70,7 @@ class SessionSecurityTests {
     @MockitoBean CheckInService checkIns;
     @MockitoBean MemberNoteService notes;
     @MockitoBean MemberService members;
+    @MockitoBean MailService mailService;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -311,6 +313,24 @@ class SessionSecurityTests {
         mvc.perform(put("/api/members/42/unban").session(adminSession)
                         .header(adminCsrf.headerName(), adminCsrf.token()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void staffCanResendMemberQrWithCsrf() throws Exception {
+        var session = new MockHttpSession();
+        UUID memberId = UUID.randomUUID();
+        String route = "/api/members/" + memberId + "/qr/resend";
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post(route).session(session)).andExpect(status().isForbidden());
+        verifyNoInteractions(mailService);
+
+        Csrf resendCsrf = csrf(session);
+        mvc.perform(post(route).session(session).header(resendCsrf.headerName(), resendCsrf.token()))
+                .andExpect(status().isNoContent());
+        verify(mailService).sendMail(memberId);
     }
 
     private MockHttpServletRequestBuilder login(MockHttpSession session, String password) {

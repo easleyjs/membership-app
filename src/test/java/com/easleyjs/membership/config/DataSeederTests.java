@@ -35,7 +35,7 @@ class DataSeederTests {
         var request = new MemberCreateRequest("Josh", "Test", email);
         when(memberRepo.count()).thenReturn(1L);
         when(memberRepo.findByEmail(email)).thenReturn(Optional.empty());
-        when(memberService.createMember(request)).thenReturn(new MemberResponse(
+        when(memberService.createSeedMember(request)).thenReturn(new MemberResponse(
                 memberId, "Josh", "Test", email, 42L, member.getStatus(), false, 0));
         when(memberRepo.findById(memberId)).thenReturn(Optional.of(member));
         when(appUserRepo.findByMember_Email(email)).thenReturn(Optional.empty());
@@ -56,7 +56,7 @@ class DataSeederTests {
         when(appUserRepo.findByMember_Email(email)).thenReturn(Optional.of(admin));
         seeder.seedMembers(memberRepo, memberService, appUserRepo, passwordEncoder, new MockEnvironment()).run();
 
-        verify(memberService).createMember(request);
+        verify(memberService).createSeedMember(request);
         verify(appUserRepo).save(admin);
         assertThat(admin.getPasswordHash()).isEqualTo(originalHash);
         assertThat(admin.isEnabled()).isFalse();

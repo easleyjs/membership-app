@@ -123,6 +123,9 @@ window.App = window.App || {};
     setMemberBanned(memberNumber, banned) {
       return request(`/members/${memberNumber}/${banned ? "ban" : "unban"}`, { method: "PUT" });
     },
+    resendQr(memberId) {
+      return request(`/members/${memberId}/qr/resend`, { method: "POST" });
+    },
     getMemberships(memberNumber, page) {
       return request(`/members/${memberNumber}/memberships?page=${page}`);
     },
@@ -160,9 +163,6 @@ window.App = window.App || {};
     },
     setMemberRole(id, role) {
       return request(`/members/${id}/role`, { method: "PATCH", body: { role } });
-    },
-    reissueQr(id) {
-      return request(`/members/${id}/qr/reissue`, { method: "POST" });
     },
 
     // --- Door check-in ---

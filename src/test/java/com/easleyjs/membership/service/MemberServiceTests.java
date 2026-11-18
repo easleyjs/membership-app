@@ -4,6 +4,7 @@ import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.repository.MemberNoteRepository;
 import com.easleyjs.membership.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +17,7 @@ class MemberServiceTests {
     private final MemberRepository members = mock(MemberRepository.class);
     private final MemberNoteRepository notes = mock(MemberNoteRepository.class);
     private final MembershipService membershipService = mock(MembershipService.class);
-    private final MemberService service = new MemberService(members, notes, membershipService);
+    private final MemberService service = new MemberService(members, notes, membershipService, mock(ApplicationEventPublisher.class));
 
     @Test
     void memberListIncludesCountsAndDefaultsMembersWithoutNotesToZero() {
