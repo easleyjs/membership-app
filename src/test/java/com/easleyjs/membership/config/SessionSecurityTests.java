@@ -1,6 +1,8 @@
 package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.controller.AuthController;
+import com.easleyjs.membership.controller.AppUserController;
+import com.easleyjs.membership.controller.AppUserInviteController;
 import com.easleyjs.membership.controller.CheckInController;
 import com.easleyjs.membership.controller.EventController;
 import com.easleyjs.membership.controller.MemberController;
@@ -20,6 +22,7 @@ import com.easleyjs.membership.entity.UserRole;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.EventRepository;
 import com.easleyjs.membership.service.CheckInService;
+import com.easleyjs.membership.service.AppUserService;
 import com.easleyjs.membership.service.EventService;
 import com.easleyjs.membership.service.MailService;
 import com.easleyjs.membership.service.MemberNoteService;
@@ -55,7 +58,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AuthController.class, CheckInController.class, EventController.class,
+@WebMvcTest({AuthController.class, AppUserController.class, AppUserInviteController.class,
+        CheckInController.class, EventController.class,
         MemberNoteController.class, MemberController.class})
 @Import({SecurityConfig.class, UserDetailsConfig.class, EventService.class})
 class SessionSecurityTests {
@@ -71,6 +75,7 @@ class SessionSecurityTests {
     @MockitoBean MemberNoteService notes;
     @MockitoBean MemberService members;
     @MockitoBean MailService mailService;
+    @MockitoBean AppUserService appUserService;
 
     private final UUID userId = UUID.randomUUID();
     private AppUser account;
@@ -82,6 +87,52 @@ class SessionSecurityTests {
         ReflectionTestUtils.setField(account, "id", userId);
         when(users.findByMember_Email(EMAIL)).thenReturn(Optional.of(account));
         when(users.findRoleById(userId)).thenAnswer(invocation -> Optional.of(account.getRole()));
+    }
+
+    @Test
+    void pendingAccountCannotSignIn() throws Exception {
+        when(users.findByMember_Email(EMAIL))
+                .thenReturn(Optional.of(new AppUser(account.getMember(), UserRole.STAFF)));
+        var session = new MockHttpSession();
+        Csrf csrf = csrf(session);
+
+        mvc.perform(login(session, PASSWORD).header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anonymousRecipientCanAcceptInviteWithCsrf() throws Exception {
+        var session = new MockHttpSession();
+        var body = mapper.writeValueAsString(new AppUserInviteController.AcceptInviteRequest(
+                "a".repeat(64), "an example password"));
+        String path = "/api/auth/accept-invite";
+        mvc.perform(post(path).session(session).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(appUserService);
+
+        Csrf csrf = csrf(session);
+        mvc.perform(post(path).session(session).header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent());
+        verify(appUserService).acceptInvite("a".repeat(64), "an example password");
+    }
+
+    @Test
+    void onlyAdminsCanResendInvites() throws Exception {
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+        Csrf csrf = csrf(session);
+        String path = "/api/users/" + userId + "/invite/resend";
+        mvc.perform(post(path).session(session).header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(appUserService);
+
+        account.setRole(UserRole.ADMIN);
+        mvc.perform(post(path).session(session).header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isNoContent());
+        verify(appUserService).resendInvite(userId);
     }
 
     @Test

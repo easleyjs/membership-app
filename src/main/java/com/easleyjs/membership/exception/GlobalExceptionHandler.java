@@ -4,6 +4,7 @@ import com.easleyjs.membership.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -75,6 +76,13 @@ public class GlobalExceptionHandler {
                         "",
                         Instant.now()
                 ));
+    }
+
+    @ExceptionHandler(AppUserInviteException.class)
+    public ResponseEntity<ApiErrorResponse> handleAppUserInvite(AppUserInviteException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.status())
+                .cacheControl(CacheControl.noStore())
+                .body(ApiErrorResponse.of("APP_USER_INVITE_ERROR", ex.getMessage(), request.getRequestURI()));
     }
 
     @ExceptionHandler(MemberAlreadyHasUserException.class)

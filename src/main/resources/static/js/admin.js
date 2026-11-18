@@ -32,6 +32,10 @@ window.App = window.App || {};
     const choosingMember = section === "users" && !record;
     const save = element("adminEditorSave");
     save.disabled = choosingMember;
+    save.textContent = choosingMember ? "Send invite" : "Save";
+    const resend = element("adminEditorResendInvite");
+    resend.hidden = section !== "users" || record?.status !== "PENDING_INVITE";
+    resend.disabled = false;
     const deactivate = element("adminEditorDeactivate");
     deactivate.hidden = section !== "events" || record?.status !== "ACTIVE";
     deactivate.disabled = false;
@@ -133,6 +137,26 @@ window.App = window.App || {};
       event.preventDefault();
       closeEditor();
     });
+    const resend = element("adminEditorResendInvite");
+    resend.addEventListener("click", async () => {
+      const current = editor;
+      if (!current || current.saving || resend.hidden || !App.auth.isAdmin()) return;
+      const save = element("adminEditorSave");
+      current.saving = true;
+      save.disabled = true;
+      resend.disabled = true;
+      feedback("Renewing invite…");
+      try {
+        await App.api.resendUserInvite(current.record.id);
+        feedback("A new invite was issued. The previous link has expired.");
+      } catch (error) {
+        feedback(`Couldn't resend invite: ${error.message}`);
+      } finally {
+        current.saving = false;
+        save.disabled = false;
+        resend.disabled = false;
+      }
+    });
     element("adminEditorForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       const current = editor;
@@ -148,6 +172,7 @@ window.App = window.App || {};
       current.saving = true;
       save.disabled = true;
       deactivate.disabled = true;
+      resend.disabled = true;
       feedback(deactivating ? "Deactivating…" : "Saving…");
       try {
         if (deactivating) {
@@ -177,6 +202,7 @@ window.App = window.App || {};
         current.saving = false;
         save.disabled = false;
         deactivate.disabled = false;
+        resend.disabled = false;
         if (memberSearch) memberSearch.readOnly = false;
         feedback(`Couldn't ${deactivating ? "deactivate event" : "save"}: ${error.message}`);
       }

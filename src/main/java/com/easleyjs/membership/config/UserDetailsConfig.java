@@ -1,6 +1,7 @@
 package com.easleyjs.membership.config;
 
 import com.easleyjs.membership.entity.AppUser;
+import com.easleyjs.membership.entity.UserStatus;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.security.SessionUser;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +23,7 @@ public class UserDetailsConfig {
     UserDetailsService userDetailsService(AppUserRepository appUserRepo) {
         return email -> {
             AppUser account = appUserRepo.findByMember_Email(email)
+                    .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                     .orElseThrow(() -> new UsernameNotFoundException("Account not found"));
 
             return new SessionUser(email, account);

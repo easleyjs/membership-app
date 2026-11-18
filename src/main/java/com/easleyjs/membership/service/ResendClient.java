@@ -37,7 +37,7 @@ public class ResendClient {
         this.client = client;
     }
 
-    String sendEmail(String recipient, String subject, String html, String qrContentId, byte[] qrPng) {
+    public String sendEmail(String recipient, String subject, String html, String qrContentId, byte[] qrPng) {
         String apiKey = environment.getProperty("RESEND_API_KEY");
         if (!StringUtils.hasText(apiKey)) {
             throw new MailSendException("Set RESEND_API_KEY in dev.env or the application environment.");

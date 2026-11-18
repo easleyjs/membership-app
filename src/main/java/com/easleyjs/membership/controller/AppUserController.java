@@ -62,4 +62,10 @@ public class AppUserController {
             ) {
         return appUserService.updateStatus(memberNumber, request.enabled());
     }
+
+    @PostMapping("/{id}/invite/resend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resendInvite(@PathVariable UUID id) {
+        appUserService.resendInvite(id);
+    }
 }
