@@ -13,6 +13,7 @@ import com.easleyjs.membership.exception.AppUserInviteException;
 import com.easleyjs.membership.exception.AppUserNotFoundException;
 import com.easleyjs.membership.exception.MemberAlreadyHasUserException;
 import com.easleyjs.membership.exception.MemberNotFoundException;
+import com.easleyjs.membership.exception.PasswordChangeException;
 import com.easleyjs.membership.repository.AppUserInviteRepository;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.MemberRepository;
@@ -126,6 +127,27 @@ public class AppUserService {
         Instant now = Instant.now();
         invites.markUnusedInvitesUsed(id, now);
         issueInvite(user, now);
+    }
+
+    @Transactional
+    public void changePassword(UUID id, String currentPassword, String newPassword) {
+        AppUser user = appUserRepo.findByIdForUpdate(id)
+                .orElseThrow(() -> new AppUserNotFoundException("App user not found: " + id));
+        if (!user.isEnabled() || user.getStatus() != UserStatus.ACTIVE) {
+            throw new PasswordChangeException("Your account is not active. Contact an admin.");
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new PasswordChangeException("Your current password is incorrect.");
+        }
+        if (newPassword.codePointCount(0, newPassword.length()) < 12
+                || newPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new PasswordChangeException(
+                    "Use at least 12 characters and at most 72 UTF-8 bytes for your password.");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new PasswordChangeException("Choose a password different from your current password.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
     }
 
     @Transactional

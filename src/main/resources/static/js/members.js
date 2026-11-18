@@ -620,9 +620,8 @@ window.App = window.App || {};
     });
 
     profileBtn.addEventListener("click", () => {
-      // Placeholder — navigate to profile page here
-      console.log("Profile clicked");
       closeUserMenu();
+      window.location.assign("profile.html");
     });
 
     logoutBtn.addEventListener("click", async () => {

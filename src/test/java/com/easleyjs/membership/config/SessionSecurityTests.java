@@ -90,6 +90,35 @@ class SessionSecurityTests {
     }
 
     @Test
+    void passwordChangeRequiresSessionAndCsrfAndUsesSignedInAccount() throws Exception {
+        String path = "/api/auth/change-password";
+        String body = mapper.writeValueAsString(new AuthController.ChangePasswordRequest(PASSWORD, "my new password"));
+        var anonymous = new MockHttpSession();
+        Csrf anonymousCsrf = csrf(anonymous);
+        mvc.perform(post(path).session(anonymous).header(anonymousCsrf.headerName(), anonymousCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/profile.html")).andExpect(redirectedUrl("/login.html"));
+
+        var session = new MockHttpSession();
+        Csrf loginCsrf = csrf(session);
+        mvc.perform(login(session, PASSWORD).header(loginCsrf.headerName(), loginCsrf.token()))
+                .andExpect(status().isNoContent());
+        mvc.perform(post(path).session(session).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(appUserService);
+        Csrf csrf = csrf(session);
+        mvc.perform(post(path).session(session).header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post(path).session(session).header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNoContent()).andExpect(header().string("Cache-Control", "no-store"));
+        verify(appUserService).changePassword(userId, PASSWORD, "my new password");
+        mvc.perform(get("/profile.html").session(session)).andExpect(status().isOk());
+    }
+
+    @Test
     void pendingAccountCannotSignIn() throws Exception {
         when(users.findByMember_Email(EMAIL))
                 .thenReturn(Optional.of(new AppUser(account.getMember(), UserRole.STAFF)));
