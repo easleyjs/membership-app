@@ -7,7 +7,7 @@
 #@emailPath = /api/email
 @baseUrl = http://localhost:8080
 @username = josh@example.com
-@memberId = d8c34866-edef-4078-8867-4e6100b7dcb0
+@memberId = cb02f984-bb87-477c-b787-8de59a0f8ae8
 @emailPath = /api/email/resend
 
 ### 1. Get a CSRF token for login
