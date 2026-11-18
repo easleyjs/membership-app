@@ -223,7 +223,9 @@ window.App = window.App || {};
         return user.role?.toLowerCase() === activeFilter;
       case "active":
       case "inactive":
-        return user.enabled === (activeFilter === "active");
+        return user.status !== "PENDING_INVITE" && user.enabled === (activeFilter === "active");
+      case "pending-invite":
+        return user.status === "PENDING_INVITE";
       default:
         return true;
     }
@@ -294,6 +296,7 @@ window.App = window.App || {};
     const isUsers = section === "users";
     chips.hidden = section === "events";
     chips.querySelector('[data-filter="banned"]').hidden = section !== "members";
+    chips.querySelector('[data-filter="pending-invite"]').hidden = !isUsers;
     chips.querySelector('[data-filter="active"]').textContent = isUsers ? "Enabled" : "Active";
     chips.querySelector('[data-filter="inactive"]').textContent = isUsers ? "Disabled" : "Inactive";
     document.querySelectorAll("[data-section]").forEach((button) => {
@@ -462,7 +465,8 @@ window.App = window.App || {};
         const summary = document.createElement("span");
         summary.className = "modal-entry-meta";
         summary.textContent = section === "users"
-          ? [m.email, m.role, m.enabled ? "Enabled" : "Disabled"].filter(Boolean).join(" · ")
+          ? [m.email, m.role, m.status === "PENDING_INVITE" ? "Pending invite" : "",
+             m.enabled ? "Enabled" : "Disabled"].filter(Boolean).join(" · ")
           : [m.location, m.status, m.startsAt && new Date(m.startsAt).toLocaleString()].filter(Boolean).join(" · ");
         card.append(title, summary);
         card.addEventListener("click", () => App.admin.openEditor(section, m, loadData));

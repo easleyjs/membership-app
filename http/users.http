@@ -13,7 +13,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "memberId": "<TBD>"
+  "memberId": "<TBD>",
+  "role": "STAFF"
 }
 
 ### Find the seeded test admin
@@ -78,13 +79,12 @@ Content-Type: application/json
 
 {
   "memberId": "{{statusTestMemberId}}",
-  "username": "status-test-{{$uuid}}",
-  "password": "dev-fixture-only",
   "role": "STAFF"
 }
 
 > {%
     client.assert(response.status === 201, "Expected HTTP 201 for app user creation");
+    client.assert(response.body.status === "PENDING_INVITE", "New app users should be pending");
 %}
 
 ### Status 4. Disable the app user

@@ -13,6 +13,7 @@ import com.easleyjs.membership.entity.Membership;
 import com.easleyjs.membership.entity.MembershipStatus;
 import com.easleyjs.membership.entity.MembershipType;
 import com.easleyjs.membership.entity.UserRole;
+import com.easleyjs.membership.entity.UserStatus;
 import com.easleyjs.membership.exception.BannedMemberCheckInException;
 import com.easleyjs.membership.exception.CheckInConflictException;
 import com.easleyjs.membership.exception.CheckInMembershipRequiredException;
@@ -379,6 +380,7 @@ class CheckInServiceTests {
     private void stubStaff() {
         when(users.findById(staffId)).thenReturn(Optional.of(staff));
         when(staff.isEnabled()).thenReturn(true);
+        when(staff.getStatus()).thenReturn(UserStatus.ACTIVE);
         when(staff.getRole()).thenReturn(UserRole.STAFF);
         when(staff.getId()).thenReturn(staffId);
     }

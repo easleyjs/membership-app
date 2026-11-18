@@ -106,6 +106,9 @@ window.App = window.App || {};
     getCurrentUser() {
       return request("/auth/me", { method: "GET" });
     },
+    acceptInvite(token, password) {
+      return request("/auth/accept-invite", { method: "POST", body: { token, password } });
+    },
 
     // --- Members (Door view — no role info) ---
     getMembers(params = {}) {
@@ -149,6 +152,9 @@ window.App = window.App || {};
     },
     createUser(fields) {
       return request("/users", { method: "POST", body: fields });
+    },
+    resendUserInvite(id) {
+      return request(`/users/${id}/invite/resend`, { method: "POST" });
     },
     searchEligibleMembers(query) {
       return request(`/users/eligible-members?${new URLSearchParams({ query })}`);

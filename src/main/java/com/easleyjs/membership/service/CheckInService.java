@@ -12,6 +12,7 @@ import com.easleyjs.membership.entity.MemberStatus;
 import com.easleyjs.membership.entity.MembershipStatus;
 import com.easleyjs.membership.entity.MembershipType;
 import com.easleyjs.membership.entity.UserRole;
+import com.easleyjs.membership.entity.UserStatus;
 import com.easleyjs.membership.exception.*;
 import com.easleyjs.membership.repository.AppUserRepository;
 import com.easleyjs.membership.repository.CheckInRepository;
@@ -190,7 +191,7 @@ public class CheckInService {
             throw new AccessDeniedException("Check-ins must use the signed-in staff account.");
         }
         return appUserRepository.findById(authenticatedStaffId)
-                .filter(AppUser::isEnabled)
+                .filter(user -> user.isEnabled() && user.getStatus() == UserStatus.ACTIVE)
                 .filter(user -> user.getRole() == UserRole.STAFF || user.getRole() == UserRole.ADMIN)
                 .orElseThrow(() -> new AccessDeniedException("An enabled staff account is required."));
     }

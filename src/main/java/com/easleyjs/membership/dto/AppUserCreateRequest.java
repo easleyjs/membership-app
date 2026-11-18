@@ -7,7 +7,5 @@ import java.util.UUID;
 
 public record AppUserCreateRequest(
         @NotNull UUID memberId,
-        String username,
-        String password,
         @NotNull UserRole role
 ) {}

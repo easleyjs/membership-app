@@ -52,6 +52,7 @@
     <button class="chip" data-filter="staff" aria-pressed="false">Staff</button>
     <button class="chip" data-filter="active" aria-pressed="false">Active</button>
     <button class="chip" data-filter="inactive" aria-pressed="false">Inactive</button>
+    <button class="chip" data-filter="pending-invite" aria-pressed="false" hidden>Pending invite</button>
     <button class="chip" data-filter="banned" aria-pressed="false">Banned</button>
   </nav>
 
@@ -172,6 +173,7 @@
       <p class="modal-feedback" id="adminEditorFeedback" role="status" hidden></p>
       <div class="modal-form-actions">
         <button class="modal-btn modal-btn-accent" type="submit" id="adminEditorSave">Save</button>
+        <button class="modal-btn" type="button" id="adminEditorResendInvite" hidden>Resend invite</button>
         <button class="modal-btn modal-btn-danger" type="submit" id="adminEditorDeactivate" formnovalidate hidden>Deactivate</button>
       </div>
     </form>
@@ -200,7 +202,7 @@
   <template id="editUserFields">
     <label>Full name <input name="name" readonly></label>
     <label>Role <select name="role" required><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>
-    <label class="editor-check"><input name="enabled" type="checkbox"> Account active</label>
+    <label class="editor-check"><input name="enabled" type="checkbox"> Account enabled</label>
   </template>
 
   <template id="eventFields">

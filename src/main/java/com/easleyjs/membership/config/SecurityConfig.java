@@ -35,7 +35,9 @@ public class SecurityConfig {
                 .addFilterBefore(new SessionRoleFilter(users), AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/login.html", "/css/**", "/js/**", "/api/auth/csrf", "/images/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/login.html", "/set-password.html",
+                                "/css/**", "/js/**", "/api/auth/csrf", "/images/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/accept-invite").permitAll()
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/members/{memberNumber}/ban",
                                 "/api/members/{memberNumber}/unban").hasRole("ADMIN")

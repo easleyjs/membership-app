@@ -32,8 +32,11 @@ public class AppUser {
     )
     private Member member;
 
-    @Column(nullable = false)
     private String passwordHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -58,6 +61,17 @@ public class AppUser {
         this.member = member;
         this.passwordHash = passwordHash;
         this.role = role;
-        this.enabled = true;
+        this.status = UserStatus.ACTIVE;
+    }
+
+    public AppUser(Member member, UserRole role) {
+        this.member = member;
+        this.role = role;
+        this.status = UserStatus.PENDING_INVITE;
+    }
+
+    public void acceptInvite(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.status = UserStatus.ACTIVE;
     }
 }
