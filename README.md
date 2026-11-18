@@ -9,6 +9,10 @@ Spring Security issues an `HttpOnly`, `SameSite=Lax` session cookie with a 30-mi
 
 For API clients, keep a cookie jar across requests. Get `/api/auth/csrf` before sending a write request and send the returned `token` in the returned `headerName`. Post form-encoded `username` (the email address) and `password` to `/api/auth/login`. Successful login and logout return `204`. Use `GET /api/auth/me` to read the account's `id`, `displayName`, and `role`. Fetch a fresh CSRF token before posting to `/api/auth/logout`, since login clears the previous token.
 
+## Changing your password
+
+Signed-in users can open **Profile** from the avatar menu to change their password. Enter the current password and confirm a different new password of at least 12 characters and at most 72 UTF-8 bytes. API clients can post `currentPassword` and `newPassword` as JSON to `/api/auth/change-password` with their session cookie and a fresh CSRF token; success returns `204`.
+
 ## Inviting app users
 
 Select a member and role in the admin Users tab. The portal creates a pending account and sends **WELCOME TO OUTLAND STAFF** to the member's address through Resend. Set `RESEND_API_KEY` and use a `RESEND_FROM` address on a domain verified in Resend to send to staff. The invite expires after 24 hours and activates the account when the recipient sets a password of at least 12 characters. To invalidate an outstanding link and issue a fresh one, open the pending user's editor and choose **Resend invite**.

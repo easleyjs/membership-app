@@ -106,6 +106,9 @@ window.App = window.App || {};
     getCurrentUser() {
       return request("/auth/me", { method: "GET" });
     },
+    changePassword(currentPassword, newPassword) {
+      return request("/auth/change-password", { method: "POST", body: { currentPassword, newPassword } });
+    },
     acceptInvite(token, password) {
       return request("/auth/accept-invite", { method: "POST", body: { token, password } });
     },

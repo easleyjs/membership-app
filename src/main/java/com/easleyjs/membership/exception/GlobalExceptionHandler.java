@@ -22,6 +22,13 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(PasswordChangeException.class)
+    public ResponseEntity<ApiErrorResponse> handlePasswordChange(
+            PasswordChangeException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().cacheControl(CacheControl.noStore())
+                .body(ApiErrorResponse.of("PASSWORD_CHANGE_FAILED", ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(
             HttpServletRequest request
