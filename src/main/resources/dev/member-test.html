@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test member creation · OUTLAND</title>
+  <link rel="stylesheet" href="/css/members.css">
+  <link rel="stylesheet" href="/css/profile.css">
+</head>
+<body>
+  <!-- TODO: Remove this temporary form after the demo period. -->
+  <header class="header">
+    <div class="header-top">
+      <h1>OUTLAND</h1>
+      <a class="profile-back" href="/members.html">Back to portal</a>
+    </div>
+  </header>
+  <main class="profile-layout">
+    <h1>Create a test member</h1>
+    <p class="profile-identity">Dev profile · Admin only · Temporary demo tool</p>
+    <section class="profile-card" aria-labelledby="formHeading">
+      <h2 id="formHeading">Dummy member details</h2>
+      <p class="profile-help">Creates a real member with a member number, QR code, and free membership.
+        Use a unique dummy member email. The welcome email goes only to the separate delivery address below.</p>
+      <form id="memberForm">
+        <fieldset id="memberFields" style="border:0; padding:0; margin:0; min-width:0">
+          <div class="profile-field">
+            <label for="firstName">First name</label>
+            <input id="firstName" name="firstName" maxlength="100" required>
+          </div>
+          <div class="profile-field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" name="lastName" maxlength="100" required>
+          </div>
+          <div class="profile-field">
+            <label for="email">Member email</label>
+            <input id="email" name="email" type="email" maxlength="255" placeholder="demo-001@example.test" required>
+          </div>
+          <div class="profile-field">
+            <label for="welcomeEmailTo">Send welcome emails to:</label>
+            <input id="welcomeEmailTo" name="welcomeEmailTo" type="email" maxlength="255" aria-describedby="recipientHelp" required>
+          </div>
+          <p class="profile-help" id="recipientHelp">You can reuse an existing member's email here.
+            This address is used for this welcome email only; it does not change the member email stored in the database.</p>
+          <button class="modal-btn modal-btn-accent" id="createMember" type="submit">Create test member</button>
+        </fieldset>
+        <p class="profile-feedback" id="feedback" role="status" aria-live="polite" hidden></p>
+      </form>
+    </section>
+  </main>
+  <script src="/js/api.js"></script>
+  <script>
+    const form = document.getElementById('memberForm');
+    const fields = document.getElementById('memberFields');
+    const submit = document.getElementById('createMember');
+    const feedback = document.getElementById('feedback');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (fields.disabled) return;
+      const details = Object.fromEntries(new FormData(form));
+      for (const key of Object.keys(details)) details[key] = details[key].trim();
+      fields.disabled = true;
+      submit.textContent = 'Creating…';
+      feedback.hidden = true;
+      try {
+        const member = await App.api.createDevMember(details);
+        feedback.textContent = `Created member #${member.memberNumber}: ${member.firstName} ${member.lastName} (${member.email}). Welcome email requested for ${details.welcomeEmailTo}. Check your inbox or Mailpit when running with the local profile.`;
+        feedback.classList.add('is-success');
+        // Keep the recipient for repeated demos; require new member details each time.
+        form.reset();
+        document.getElementById('welcomeEmailTo').value = details.welcomeEmailTo;
+      } catch (failure) {
+        if (failure.status === 401) {
+          window.location.replace('/login.html?next=member-test');
+          return;
+        }
+        feedback.textContent = failure.message;
+        feedback.classList.remove('is-success');
+      } finally {
+        fields.disabled = false;
+        submit.textContent = 'Create test member';
+        feedback.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

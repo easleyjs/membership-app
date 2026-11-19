@@ -67,7 +67,7 @@ public class MemberService {
         return MemberResponse.from(saveMemberWithFreeMembership(memberRequest), 0);
     }
 
-    private Member saveMemberWithFreeMembership(MemberCreateRequest memberRequest) {
+    Member saveMemberWithFreeMembership(MemberCreateRequest memberRequest) {
         Long memberNumber = memberRepository.getNextMemberNumber();
         String qrToken = UUID.randomUUID().toString();
 

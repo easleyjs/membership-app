@@ -47,7 +47,8 @@ class ResendClientTests {
         var member = new Member("Tess & Co", "Example", "tess@example.test", 42L, "unused-token");
         ReflectionTestUtils.setField(member, "id", memberId);
         when(members.findById(memberId)).thenReturn(Optional.of(member));
-        var mail = new MailService(smtp, members, new QrCodeService(), new ResendClient(environment, builder.build()));
+        var resend = new ResendClient(environment, builder.build());
+        var mail = new MailService(new ResendEmailDelivery(resend), members, new QrCodeService(), resend);
         mvc = MockMvcBuilders.standaloneSetup(new MailController(mail))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

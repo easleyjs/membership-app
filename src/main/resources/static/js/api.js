@@ -114,6 +114,10 @@ window.App = window.App || {};
     },
 
     // --- Members (Door view — no role info) ---
+    // TODO: Remove after the demo period, along with the dev member form.
+    createDevMember(fields) {
+      return request("/dev/members", { method: "POST", body: fields });
+    },
     getMembers(params = {}) {
       const query = new URLSearchParams(params).toString();
       return request(`/members${query ? `?${query}` : ""}`, { method: "GET" });

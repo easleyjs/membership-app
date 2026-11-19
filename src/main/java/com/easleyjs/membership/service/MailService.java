@@ -6,11 +6,8 @@ import com.easleyjs.membership.repository.MemberRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailPreparationException;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
@@ -31,14 +28,14 @@ public class MailService {
     private static final ClassPathResource WELCOME_TEMPLATE =
             new ClassPathResource("templates/email/welcome-to-outland.html");
 
-    private final JavaMailSender mailSender;
+    private final EmailDelivery delivery;
     private final MemberRepository memberRepository;
     private final QrCodeService qrCodeService;
     private final ResendClient resendClient;
 
-    public MailService(JavaMailSender mailSender, MemberRepository memberRepository, QrCodeService qrCodeService,
+    public MailService(EmailDelivery delivery, MemberRepository memberRepository, QrCodeService qrCodeService,
                        ResendClient resendClient) {
-        this.mailSender = mailSender;
+        this.delivery = delivery;
         this.memberRepository = memberRepository;
         this.qrCodeService = qrCodeService;
         this.resendClient = resendClient;
@@ -50,7 +47,11 @@ public class MailService {
 
     public String sendMailViaResend(UUID memberId) {
         var member = findMember(memberId);
-        return resendClient.sendEmail(member.getEmail(), WELCOME_SUBJECT, renderWelcomeEmail(member, WELCOME_SUBJECT, ""),
+        return sendWelcomeEmailViaResend(member, member.getEmail());
+    }
+
+    private String sendWelcomeEmailViaResend(Member member, String recipient) {
+        return resendClient.sendEmail(recipient, WELCOME_SUBJECT, renderWelcomeEmail(member, WELCOME_SUBJECT, ""),
                 QR_CONTENT_ID, qrCodeService.generateQr(member.getId()));
     }
 
@@ -70,6 +71,17 @@ public class MailService {
     }
 
     @TransactionalEventListener
+    void sendDevWelcomeEmailAfterCommit(DevMemberService.DevMemberCreated event) {
+        try {
+            sendWelcomeEmail(event.member(), event.welcomeEmailTo());
+        } catch (RuntimeException failure) {
+            Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
+            log.warn("Could not send demo welcome email for member {} ({}; cause: {})",
+                    event.member().getId(), failure.getClass().getSimpleName(), cause.getClass().getSimpleName());
+        }
+    }
+
+    @TransactionalEventListener
     void sendAppUserInviteAfterCommit(AppUserService.InviteIssued event) {
         String invite = """
                 <tr>
@@ -82,27 +94,24 @@ public class MailService {
                 """.formatted(HtmlUtils.htmlEscape(event.link(), UTF_8.name()));
         try {
             Member member = event.member();
-            resendClient.sendEmail(event.email(), STAFF_WELCOME_SUBJECT,
+            delivery.send(event.email(), STAFF_WELCOME_SUBJECT,
                     renderWelcomeEmail(member, STAFF_WELCOME_SUBJECT, invite),
                     QR_CONTENT_ID, qrCodeService.generateQr(member.getId()));
         } catch (RuntimeException failure) {
             // Mail exceptions can include message contents.
             Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
-            log.warn("Could not send invitation via Resend for app user {} ({}; cause: {})",
+            log.warn("Could not send invitation for app user {} ({}; cause: {})",
                     event.userId(), failure.getClass().getSimpleName(), cause.getClass().getSimpleName());
         }
     }
 
     private void sendWelcomeEmail(Member member) {
-        var qrPng = new ByteArrayResource(qrCodeService.generateQr(member.getId()));
-        mailSender.send(mimeMessage -> {
-            var message = new MimeMessageHelper(mimeMessage, MimeMessageHelper.MULTIPART_MODE_RELATED, UTF_8.name());
-            message.setFrom("members@outland.test");
-            message.setTo(member.getEmail());
-            message.setSubject(WELCOME_SUBJECT);
-            message.setText(renderWelcomeEmail(member, WELCOME_SUBJECT, ""), true);
-            message.addInline(QR_CONTENT_ID, qrPng, "image/png");
-        });
+        sendWelcomeEmail(member, member.getEmail());
+    }
+
+    private void sendWelcomeEmail(Member member, String recipient) {
+        delivery.send(recipient, WELCOME_SUBJECT, renderWelcomeEmail(member, WELCOME_SUBJECT, ""),
+                QR_CONTENT_ID, qrCodeService.generateQr(member.getId()));
     }
 
     private String renderWelcomeEmail(Member member, String subject, String invite) {
