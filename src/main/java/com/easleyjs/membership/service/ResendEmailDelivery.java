@@ -1,10 +1,8 @@
 package com.easleyjs.membership.service;
 
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("!local")
 public class ResendEmailDelivery implements EmailDelivery {
     private final ResendClient resend;
 

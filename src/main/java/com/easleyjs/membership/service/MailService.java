@@ -1,13 +1,13 @@
 package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.entity.Member;
+import com.easleyjs.membership.exception.EmailDeliveryException;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.repository.MemberRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.mail.MailPreparationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
@@ -88,7 +88,7 @@ public class MailService {
                     <td align="center" style="padding:0 24px 28px; color:#ffffff;">
                         <p style="margin:0 0 12px;">You've been invited to the Outland admin portal.</p>
                         <a href="%s" style="color:#ff69b4; font-weight:bold;">Set your password</a>
-                        <p style="margin:12px 0 0;">This link expires in 24 hours and can be used once.</p>
+                        <p style="margin:12px 0 0;">This link expires in 72 hours and can be used once.</p>
                     </td>
                 </tr>
                 """.formatted(HtmlUtils.htmlEscape(event.link(), UTF_8.name()));
@@ -129,7 +129,7 @@ public class MailService {
                     .replace("Welcome, &lt;member name&gt;.", greeting);
 
         } catch (IOException failure) {
-            throw new MailPreparationException("Could not read the welcome email template", failure);
+            throw new EmailDeliveryException("Could not read the welcome email template", failure);
         }
     }
 }

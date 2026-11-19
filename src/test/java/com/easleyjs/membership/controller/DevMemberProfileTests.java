@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(DevMemberController.class)
 @Import(SecurityConfig.class)
-@ActiveProfiles("local")
+@ActiveProfiles("prod")
 class DevMemberProfileTests {
     @Autowired MockMvc mvc;
     @MockitoBean AppUserRepository users;

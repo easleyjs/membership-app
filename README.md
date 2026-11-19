@@ -1,6 +1,39 @@
 # Digital Membership App
 Spring Boot / HTML / Vanilla JS app for managing member access via QR code
 
+## Database setup
+
+The app defaults to `jdbc:postgresql://localhost:5432/memberships` with the `membership` role and `POSTGRES_PASSWORD`. Override these with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD` for deployment.
+
+Create an empty database owned by the app role before starting the app. Flyway applies `src/main/resources/db/migration/V1__init.sql` on startup, then Hibernate validates the schema. This consolidated migration is for fresh databases; databases that previously applied V1–V4 retain the old migration history and cannot use it unchanged. Add future schema changes as V2 and later migrations.
+
+## Running locally with Docker
+
+Start the existing PostgreSQL container, build the image, and pass the runtime environment file explicitly:
+
+```powershell
+docker start membership-postgres
+docker build -f dockerfile -t membership-app:demo .
+docker run -d --name membership-app --env-file .env.docker -e SPRING_PROFILES_ACTIVE=dev -p 127.0.0.1:8080:8080 membership-app:demo
+```
+
+Open `http://localhost:8080/login.html`. View startup logs with `docker logs membership-app`.
+For an existing container created with these settings, use `docker start membership-app`.
+
+Create `.env.docker` using `docker.env.example` and fill in your credentials. Its database settings must be:
+
+```properties
+SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/memberships
+SPRING_DATASOURCE_USERNAME=membership
+SPRING_DATASOURCE_PASSWORD=<your local PostgreSQL password>
+```
+
+Also set `DEV_ADMIN_PASSWORD`, `RESEND_API_KEY`, `RESEND_FROM`, and `APP_PUBLIC_BASE_URL` in `.env.docker`. Use `KEY=value` without spaces around `=`; Docker cannot directly read Spring properties entries such as `KEY = value` from `dev.env`.
+
+On Docker Desktop, `host.docker.internal` reaches the Windows host's published PostgreSQL port. Inside the app container, `localhost` refers to the app container itself. Environment files must be passed at runtime; they are excluded from the build context. Publishing port 8080 is also required; `EXPOSE` alone does not publish it.
+
+For deployment, supply your deployment database and Resend environment variables directly, set `APP_PUBLIC_BASE_URL` to your public HTTPS origin, and select `SPRING_PROFILES_ACTIVE=prod`.
+
 ## Signing in
 
 Open `/login.html` and use the email and password of an enabled app user. On a fresh dev database, set `DEV_ADMIN_PASSWORD` before starting the app to create the initial account at `josh@example.com`.
@@ -15,23 +48,16 @@ Signed-in users can open **Profile** from the avatar menu to change their passwo
 
 ## Inviting app users
 
-Select a member and role in the admin Users tab. The portal creates a pending account and sends **WELCOME TO OUTLAND STAFF** to the member's address through the profile's email delivery service (see below). The invite expires after 24 hours and activates the account when the recipient sets a password of at least 12 characters. To invalidate an outstanding link and issue a fresh one, open the pending user's editor and choose **Resend invite**.
+Select a member and role in the admin Users tab. The portal creates a pending account and sends **WELCOME TO OUTLAND STAFF** to the member's address through Resend. The invite expires after 24 hours and activates the account when the recipient sets a password of at least 12 characters. To invalidate an outstanding link and issue a fresh one, open the pending user's editor and choose **Resend invite**.
 
-Set `APP_PUBLIC_BASE_URL` to the portal's public HTTPS origin so recipients can reach the password page. The dev and local profiles default to `http://localhost:8080`. The account and invite are saved before sending email, so an admin can resend if delivery fails.
+Set `APP_PUBLIC_BASE_URL` to the portal's public HTTPS origin so recipients can reach the password page. The dev profile defaults to `http://localhost:8080`. The account and invite are saved before sending email, so an admin can resend if delivery fails.
 
-## Email delivery by profile
+## Email delivery
 
-With `local` active, welcome emails, member QR resends, and staff invitations use Mailpit at `localhost:1025`.
-Start the existing container with `docker start mailpit` and open the [Mailpit inbox](http://localhost:8025).
-The SMTP settings live only in `application-local.properties`.
-
-Without `local` (including `dev` and production), these emails use Resend and do not require SMTP.
-Set `RESEND_API_KEY` and `RESEND_FROM` in the application environment or, for dev/local runs, `dev.env`.
+Welcome emails, member QR resends, and staff invitations use Resend in every profile.
+Set `RESEND_API_KEY` and `RESEND_FROM` in the application environment or, for dev runs, `dev.env`.
 Use a sender on a verified Resend domain to deliver to other recipients; the default `onboarding@resend.dev` sender restricts delivery to your Resend account email.
-There is no SMTP fallback if Resend fails.
-
-Use `SPRING_PROFILES_ACTIVE=dev,local` to combine the dev demo tools with Mailpit; `local` takes precedence for delivery.
-The explicit diagnostic `POST /api/email/resend/{memberId}` endpoint always uses Resend, even locally.
+The diagnostic `POST /api/email/resend/{memberId}` endpoint is available with the dev profile.
 
 ## Temporary demo member form
 
@@ -40,9 +66,9 @@ Enter first name, last name, a unique dummy member email, and **Send welcome ema
 The delivery address can belong to an existing member and can be reused for multiple dummy members.
 Only the initial welcome email uses this address; the saved member email stays unique, and later QR resends use the saved address.
 The form creates real members with free memberships and sends the welcome email after the member is committed.
-Delivery uses Resend with `dev` alone, or Mailpit with `dev,local`.
+Delivery uses Resend.
 If delivery fails, the member remains created; check the application and mail delivery logs.
-The page and `POST /api/dev/members` are unavailable without `dev`, including with `local` alone.
+The page and `POST /api/dev/members` are unavailable without `dev`.
 This repository currently defaults to `dev`; explicitly select your deployment profile outside development.
 
 TODO: Remove the temporary demo form, `DevMemberController`, `DevMemberService`, `DevMemberCreateRequest`, and related login/security/API hooks after the demo period.

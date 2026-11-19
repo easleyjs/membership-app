@@ -28,14 +28,19 @@ CREATE TABLE public.app_users (
     id uuid NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     enabled boolean NOT NULL,
-    password_hash varchar(255) NOT NULL,
+    password_hash varchar(255),
     role varchar(255) NOT NULL,
+    status varchar(255) NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
     member_id uuid NOT NULL,
     CONSTRAINT app_users_pkey PRIMARY KEY (id),
     CONSTRAINT ukqkweruflsfa061tq673soanm3 UNIQUE (member_id),
     CONSTRAINT app_users_role_check CHECK (
         role::text = ANY (ARRAY['STAFF'::varchar, 'ADMIN'::varchar]::text[])
+    ),
+    CONSTRAINT app_users_status_password_check CHECK (
+        (status = 'ACTIVE' AND password_hash IS NOT NULL)
+        OR (status = 'PENDING_INVITE' AND password_hash IS NULL)
     ),
     CONSTRAINT fk7t6womejfj554dbibpiv9uv4j FOREIGN KEY (member_id) REFERENCES public.members (id)
 );
@@ -49,6 +54,7 @@ CREATE TABLE public.event (
     name varchar(255),
     starts_at timestamp(6) without time zone,
     status varchar(255),
+    created_by uuid REFERENCES public.app_users (id),
     CONSTRAINT event_pkey PRIMARY KEY (id),
     CONSTRAINT event_location_check CHECK (location = 'OUTLAND'),
     CONSTRAINT event_status_check CHECK (
@@ -64,7 +70,12 @@ CREATE TABLE public.check_in (
     received_at timestamp(6) with time zone NOT NULL,
     checked_in_by_id uuid NOT NULL,
     member_id uuid NOT NULL,
+    admission_type varchar(255) NOT NULL DEFAULT 'STANDARD',
+    membership_override_requested boolean NOT NULL DEFAULT false,
     CONSTRAINT check_in_pkey PRIMARY KEY (id),
+    CONSTRAINT check_in_admission_type_check CHECK (
+        admission_type IN ('STANDARD', 'MEMBERSHIP_OVERRIDE')
+    ),
     CONSTRAINT check_in_method_check CHECK (
         method::text = ANY (ARRAY['QR_SCAN'::varchar, 'MANUAL'::varchar]::text[])
     ),
@@ -106,3 +117,14 @@ CREATE TABLE public.memberships (
     CONSTRAINT fkkv2gm8d7nl8u1nrfvxt6tbwhc FOREIGN KEY (member_id) REFERENCES public.members (id),
     CONSTRAINT fkrlc3pwkv6owjlv0uhmvergpvd FOREIGN KEY (created_by) REFERENCES public.app_users (id)
 );
+
+CREATE TABLE public.app_user_invites (
+    token_hash varchar(64) PRIMARY KEY,
+    app_user_id uuid NOT NULL REFERENCES public.app_users (id) ON DELETE CASCADE,
+    email varchar(255) NOT NULL,
+    expires_at timestamp(6) with time zone NOT NULL,
+    used_at timestamp(6) with time zone
+);
+
+CREATE UNIQUE INDEX app_user_invites_one_unused_per_user
+    ON public.app_user_invites (app_user_id) WHERE used_at IS NULL;

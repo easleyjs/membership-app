@@ -4,12 +4,8 @@ import com.easleyjs.membership.entity.Member;
 import com.easleyjs.membership.repository.MemberRepository;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
@@ -24,18 +20,16 @@ class EmailDeliveryProfileTests {
     private final QrCodeService qrCodes = mock(QrCodeService.class);
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
-            .withConfiguration(AutoConfigurations.of(MailSenderAutoConfiguration.class))
-            .withUserConfiguration(LocalEmailDelivery.class, ResendEmailDelivery.class, MailService.class)
+            .withUserConfiguration(ResendEmailDelivery.class, MailService.class)
             .withBean(ResendClient.class, () -> resend)
             .withBean(MemberRepository.class, () -> members)
             .withBean(QrCodeService.class, () -> qrCodes);
 
     @ParameterizedTest
-    @ValueSource(strings = {"dev", "prod", "default"})
-    void nonLocalProfilesStartWithoutSmtpAndSendThroughResend(String profile) {
+    @ValueSource(strings = {"dev", "prod", "default", "local", "dev,local"})
+    void allProfilesSendThroughResend(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile).run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(EmailDelivery.class)
-                    .doesNotHaveBean(JavaMailSender.class);
+            assertThat(context).hasNotFailed().hasSingleBean(EmailDelivery.class);
             assertThat(context.getBean(EmailDelivery.class)).isInstanceOf(ResendEmailDelivery.class);
             assertThat(context.getEnvironment().getProperty("spring.mail.host")).isNull();
             exerciseMemberMail(context.getBean(MailService.class));
@@ -44,22 +38,6 @@ class EmailDeliveryProfileTests {
             verify(resend).sendEmail(eq("staff@example.test"), eq("WELCOME TO OUTLAND STAFF"),
                     contains("https://example.test/set-password"), eq("member-qr"), any());
         });
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"local", "dev,local"})
-    void localProfileTakesPrecedenceAndRoutesAllMemberMailToSmtp(String profiles) {
-        var smtp = mock(JavaMailSender.class);
-        runner.withPropertyValues("spring.profiles.active=" + profiles)
-                .withBean(JavaMailSender.class, () -> smtp).run(context -> {
-                    assertThat(context).hasNotFailed().hasSingleBean(EmailDelivery.class);
-                    assertThat(context.getBean(EmailDelivery.class)).isInstanceOf(LocalEmailDelivery.class);
-                    assertThat(context.getEnvironment().getProperty("spring.mail.host")).isEqualTo("localhost");
-                    assertThat(context.getEnvironment().getProperty("spring.mail.port")).isEqualTo("1025");
-                    exerciseMemberMail(context.getBean(MailService.class));
-                    verify(smtp, times(3)).send(any(MimeMessagePreparator.class));
-                    verifyNoInteractions(resend);
-                });
     }
 
     private void exerciseMemberMail(MailService mail) {
