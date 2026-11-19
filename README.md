@@ -1,6 +1,12 @@
 # Digital Membership App
 Spring Boot / HTML / Vanilla JS app for managing member access via QR code
 
+## Database setup
+
+The app defaults to `jdbc:postgresql://localhost:5432/memberships` with the `membership` role and `POSTGRES_PASSWORD`. Override these with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD` for deployment.
+
+Create an empty database owned by the app role before starting the app. Flyway applies `src/main/resources/db/migration/V1__init.sql` on startup, then Hibernate validates the schema. This consolidated migration is for fresh databases; databases that previously applied V1–V4 retain the old migration history and cannot use it unchanged. Add future schema changes as V2 and later migrations.
+
 ## Signing in
 
 Open `/login.html` and use the email and password of an enabled app user. On a fresh dev database, set `DEV_ADMIN_PASSWORD` before starting the app to create the initial account at `josh@example.com`.
