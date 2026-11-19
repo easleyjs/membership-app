@@ -1,11 +1,11 @@
 package com.easleyjs.membership.service;
 
+import com.easleyjs.membership.exception.EmailDeliveryException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.mail.MailSendException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -40,7 +40,7 @@ public class ResendClient {
     public String sendEmail(String recipient, String subject, String html, String qrContentId, byte[] qrPng) {
         String apiKey = environment.getProperty("RESEND_API_KEY");
         if (!StringUtils.hasText(apiKey)) {
-            throw new MailSendException("Set RESEND_API_KEY in dev.env or the application environment.");
+            throw new EmailDeliveryException("Set RESEND_API_KEY in dev.env or the application environment.");
         }
 
         var attachment = Map.of(
@@ -63,13 +63,13 @@ public class ResendClient {
                     .retrieve()
                     .body(SendResponse.class);
         } catch (RestClientResponseException failure) {
-            throw new MailSendException(describeRejection(failure));
+            throw new EmailDeliveryException(describeRejection(failure));
         } catch (RestClientException failure) {
-            throw new MailSendException("Could not complete the request to Resend.", failure);
+            throw new EmailDeliveryException("Could not complete the request to Resend.", failure);
         }
 
         if (response == null || !StringUtils.hasText(response.id())) {
-            throw new MailSendException("Resend did not return an email ID.");
+            throw new EmailDeliveryException("Resend did not return an email ID.");
         }
         return response.id();
     }

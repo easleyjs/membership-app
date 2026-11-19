@@ -3,6 +3,7 @@ package com.easleyjs.membership.service;
 import com.easleyjs.membership.dto.MemberCreateRequest;
 import com.easleyjs.membership.dto.DevMemberCreateRequest;
 import com.easleyjs.membership.entity.Member;
+import com.easleyjs.membership.exception.EmailDeliveryException;
 import com.easleyjs.membership.repository.MemberNoteRepository;
 import com.easleyjs.membership.repository.MemberRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -10,8 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -31,7 +30,6 @@ import static org.mockito.Mockito.*;
 class MemberWelcomeEmailTests {
     private final MemberCreateRequest request = new MemberCreateRequest("Tess", "Example", "tess@example.com");
     private final UUID memberId = UUID.randomUUID();
-    private final JavaMailSender mailSender = mock(JavaMailSender.class);
     private final ResendClient resend = mock(ResendClient.class);
     private final Connection connection = mock(Connection.class);
     private final AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
@@ -82,7 +80,6 @@ class MemberWelcomeEmailTests {
         order.verify(resend).sendEmail(eq(request.email()), eq("WELCOME TO OUTLAND"),
                 contains("Member: 123456"), eq("member-qr"), aryEq(new byte[]{1}));
         verifyNoMoreInteractions(resend);
-        verifyNoInteractions(mailSender);
     }
 
     @Test
@@ -94,7 +91,7 @@ class MemberWelcomeEmailTests {
         });
 
         verify(connection).rollback();
-        verifyNoInteractions(mailSender, resend);
+        verifyNoInteractions(resend);
     }
 
     @Test
@@ -102,19 +99,18 @@ class MemberWelcomeEmailTests {
         assertEquals(memberId, memberService.createSeedMember(request).id());
 
         verify(connection).commit();
-        verifyNoInteractions(mailSender, resend);
+        verifyNoInteractions(resend);
     }
 
     @Test
     void memberCreationStillSucceedsWhenMailFails() throws Exception {
-        doThrow(new MailSendException("Resend unavailable")).when(resend)
+        doThrow(new EmailDeliveryException("Resend unavailable")).when(resend)
                 .sendEmail(anyString(), anyString(), anyString(), anyString(), any(byte[].class));
 
         assertEquals(memberId, memberService.createMember(request).id());
 
         verify(connection).commit();
         verify(resend).sendEmail(eq(request.email()), anyString(), anyString(), anyString(), any(byte[].class));
-        verifyNoInteractions(mailSender);
     }
 
     @Test
@@ -134,7 +130,6 @@ class MemberWelcomeEmailTests {
         assertEquals(request.email(), saved.getValue().getEmail());
         verify(memberships).ensureFreeMembership(saved.getValue());
         verify(members, never()).findByEmail(recipient);
-        verifyNoInteractions(mailSender);
         verifyNoMoreInteractions(resend);
     }
 
@@ -147,12 +142,12 @@ class MemberWelcomeEmailTests {
             status.setRollbackOnly();
         });
         verify(connection).rollback();
-        verifyNoInteractions(mailSender, resend);
+        verifyNoInteractions(resend);
     }
 
     @Test
-    void demoCreationStillSucceedsWhenResendFailsWithoutSmtpFallback() throws Exception {
-        doThrow(new MailSendException("Resend unavailable")).when(resend)
+    void demoCreationStillSucceedsWhenResendFails() throws Exception {
+        doThrow(new EmailDeliveryException("Resend unavailable")).when(resend)
                 .sendEmail(anyString(), anyString(), anyString(), anyString(), any(byte[].class));
         var created = context.getBean(DevMemberService.class).createMember(new DevMemberCreateRequest(
                 request.firstName(), request.lastName(), request.email(), "existing@example.com"));
@@ -160,7 +155,6 @@ class MemberWelcomeEmailTests {
         verify(connection).commit();
         verify(resend).sendEmail(eq("existing@example.com"), eq("WELCOME TO OUTLAND"),
                 anyString(), eq("member-qr"), any(byte[].class));
-        verifyNoInteractions(mailSender);
     }
 
     @EnableTransactionManagement

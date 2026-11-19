@@ -1,13 +1,13 @@
 package com.easleyjs.membership.service;
 
 import com.easleyjs.membership.entity.Member;
+import com.easleyjs.membership.exception.EmailDeliveryException;
 import com.easleyjs.membership.exception.MemberNotFoundException;
 import com.easleyjs.membership.repository.MemberRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.mail.MailPreparationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
@@ -129,7 +129,7 @@ public class MailService {
                     .replace("Welcome, &lt;member name&gt;.", greeting);
 
         } catch (IOException failure) {
-            throw new MailPreparationException("Could not read the welcome email template", failure);
+            throw new EmailDeliveryException("Could not read the welcome email template", failure);
         }
     }
 }

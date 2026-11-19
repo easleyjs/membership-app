@@ -1,12 +1,12 @@
 package com.easleyjs.membership.controller;
 
 import com.easleyjs.membership.dto.ApiErrorResponse;
+import com.easleyjs.membership.exception.EmailDeliveryException;
 import com.easleyjs.membership.service.MailService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.mail.MailSendException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,7 +20,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/email")
-@Profile({"dev", "local"})
+@Profile("dev")
 public class MailController {
     private final MailService mailService;
 
@@ -37,7 +37,7 @@ public class MailController {
     public ResponseEntity<?> sendMailViaResend(@PathVariable UUID memberId, HttpServletRequest request) {
         try {
             return ResponseEntity.ok(Map.of("id", mailService.sendMailViaResend(memberId)));
-        } catch (MailSendException failure) {
+        } catch (EmailDeliveryException failure) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .body(ApiErrorResponse.of("RESEND_SEND_FAILED", failure.getMessage(), request.getRequestURI()));
         }

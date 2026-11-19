@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -23,7 +22,6 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
@@ -34,7 +32,6 @@ class ResendClientTests {
     private static final String EMAILS_URL = "https://api.resend.com/emails";
     private final UUID memberId = UUID.fromString("12345678-1234-4567-8abc-123456789012");
     private final String route = "/api/email/resend/" + memberId;
-    private final JavaMailSender smtp = mock(JavaMailSender.class);
     private final MockEnvironment environment = new MockEnvironment();
     private MockRestServiceServer resendServer;
     private MockMvc mvc;
@@ -75,7 +72,6 @@ class ResendClientTests {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.id").value("test-delivery-id"));
 
         resendServer.verify();
-        verifyNoInteractions(smtp);
     }
 
     @Test

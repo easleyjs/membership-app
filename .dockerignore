@@ -4,3 +4,6 @@ target
 .env
 .env.docker
 .env.*
+dev.env
+http/http-client.private.env.json
+*.log
