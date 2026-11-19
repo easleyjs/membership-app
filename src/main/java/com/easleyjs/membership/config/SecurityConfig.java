@@ -38,6 +38,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/login.html", "/set-password.html",
                                 "/css/**", "/js/**", "/api/auth/csrf", "/images/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/accept-invite").permitAll()
+                        // TODO: Remove the demo member routes after the demo period.
+                        .requestMatchers("/dev/**", "/api/dev/**").hasRole("ADMIN")
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/members/{memberNumber}/ban",
                                 "/api/members/{memberNumber}/unban").hasRole("ADMIN")
@@ -47,6 +49,9 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .requestCache(AbstractHttpConfigurer::disable)
                 .exceptionHandling(exceptions -> exceptions
+                        .defaultAuthenticationEntryPointFor(
+                                new LoginUrlAuthenticationEntryPoint("/login.html?next=member-test"),
+                                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/dev/member-test"))
                         .defaultAuthenticationEntryPointFor(
                                 (request, response, failure) -> writeError(objectMapper, request, response,
                                         HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Sign in to continue."),

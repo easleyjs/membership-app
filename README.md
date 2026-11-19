@@ -20,3 +20,18 @@ Select a member and role in the admin Users tab. The portal creates a pending ac
 Set `APP_PUBLIC_BASE_URL` to the portal's public HTTPS origin so recipients can reach the password page. The dev and local profiles default to `http://localhost:8080`. The account and invite are saved before sending email, so an admin can resend if delivery fails.
 
 Regular member welcome emails use SMTP. For local testing, start the existing Mailpit container with `docker start mailpit` and open the [Mailpit inbox](http://localhost:8025).
+
+## Temporary demo member form
+
+With the `dev` Spring profile active, open `/dev/member-test` and sign in as an Admin.
+Enter first name, last name, a unique dummy member email, and **Send welcome emails to:**.
+The delivery address can belong to an existing member and can be reused for multiple dummy members.
+Only the initial welcome email uses this address; the saved member email stays unique, and later QR resends use the saved address.
+The form creates real members with free memberships and sends the welcome email through Resend after the member is committed.
+Set `RESEND_API_KEY` and `RESEND_FROM` in `dev.env` or the application environment.
+Use a sender on a verified Resend domain to deliver to other recipients; the default `onboarding@resend.dev` sender restricts delivery to your Resend account email.
+If delivery fails, the member remains created; check the application and Resend delivery logs.
+The page and `POST /api/dev/members` are unavailable without `dev`, including with `local` alone.
+This repository currently defaults to `dev`; explicitly select your deployment profile outside development.
+
+TODO: Remove the temporary demo form, `DevMemberController`, `DevMemberService`, `DevMemberCreateRequest`, and related login/security/API hooks after the demo period.

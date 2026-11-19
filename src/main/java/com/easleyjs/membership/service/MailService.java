@@ -50,7 +50,11 @@ public class MailService {
 
     public String sendMailViaResend(UUID memberId) {
         var member = findMember(memberId);
-        return resendClient.sendEmail(member.getEmail(), WELCOME_SUBJECT, renderWelcomeEmail(member, WELCOME_SUBJECT, ""),
+        return sendWelcomeEmailViaResend(member, member.getEmail());
+    }
+
+    private String sendWelcomeEmailViaResend(Member member, String recipient) {
+        return resendClient.sendEmail(recipient, WELCOME_SUBJECT, renderWelcomeEmail(member, WELCOME_SUBJECT, ""),
                 QR_CONTENT_ID, qrCodeService.generateQr(member.getId()));
     }
 
@@ -66,6 +70,17 @@ public class MailService {
             sendWelcomeEmail(member);
         } catch (RuntimeException failure) {
             log.warn("Could not send welcome email for member {}", member.getId(), failure);
+        }
+    }
+
+    @TransactionalEventListener
+    void sendDevWelcomeEmailAfterCommit(DevMemberService.DevMemberCreated event) {
+        try {
+            sendWelcomeEmailViaResend(event.member(), event.welcomeEmailTo());
+        } catch (RuntimeException failure) {
+            Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
+            log.warn("Could not send demo welcome email via Resend for member {} ({}; cause: {})",
+                    event.member().getId(), failure.getClass().getSimpleName(), cause.getClass().getSimpleName());
         }
     }
 
