@@ -1,0 +1,6 @@
+.git
+.idea
+target
+.env
+.env.docker
+.env.*
