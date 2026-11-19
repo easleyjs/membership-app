@@ -65,7 +65,7 @@
       feedback.hidden = true;
       try {
         const member = await App.api.createDevMember(details);
-        feedback.textContent = `Created member #${member.memberNumber}: ${member.firstName} ${member.lastName} (${member.email}). Welcome email requested via Resend for ${details.welcomeEmailTo}. Check your inbox and Resend delivery logs.`;
+        feedback.textContent = `Created member #${member.memberNumber}: ${member.firstName} ${member.lastName} (${member.email}). Welcome email requested for ${details.welcomeEmailTo}. Check your inbox or Mailpit when running with the local profile.`;
         feedback.classList.add('is-success');
         // Keep the recipient for repeated demos; require new member details each time.
         form.reset();

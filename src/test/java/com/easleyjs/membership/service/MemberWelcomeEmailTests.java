@@ -12,9 +12,6 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessagePreparator;
-import jakarta.mail.Session;
-import jakarta.mail.internet.MimeMessage;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -25,7 +22,6 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.util.UUID;
 import java.util.Optional;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,7 +63,7 @@ class MemberWelcomeEmailTests {
                 memberships, context));
         context.registerBean(DevMemberService.class, () -> new DevMemberService(
                 context.getBean(MemberService.class), context));
-        context.registerBean(MailService.class, () -> new MailService(mailSender, members, qrCodes, resend));
+        context.registerBean(MailService.class, () -> new MailService(new ResendEmailDelivery(resend), members, qrCodes, resend));
         context.refresh();
         memberService = context.getBean(MemberService.class);
     }
@@ -81,14 +77,12 @@ class MemberWelcomeEmailTests {
     void sendsWelcomeEmailAfterMemberCreationCommits() throws Exception {
         assertEquals(memberId, memberService.createMember(request).id());
 
-        var order = inOrder(connection, mailSender);
+        var order = inOrder(connection, resend);
         order.verify(connection).commit();
-        var preparator = ArgumentCaptor.forClass(MimeMessagePreparator.class);
-        order.verify(mailSender).send(preparator.capture());
-        var message = new MimeMessage(Session.getInstance(new Properties()));
-        preparator.getValue().prepare(message);
-        assertEquals(request.email(), message.getAllRecipients()[0].toString());
-        verifyNoMoreInteractions(mailSender);
+        order.verify(resend).sendEmail(eq(request.email()), eq("WELCOME TO OUTLAND"),
+                contains("Member: 123456"), eq("member-qr"), aryEq(new byte[]{1}));
+        verifyNoMoreInteractions(resend);
+        verifyNoInteractions(mailSender);
     }
 
     @Test
@@ -100,7 +94,7 @@ class MemberWelcomeEmailTests {
         });
 
         verify(connection).rollback();
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(mailSender, resend);
     }
 
     @Test
@@ -108,17 +102,19 @@ class MemberWelcomeEmailTests {
         assertEquals(memberId, memberService.createSeedMember(request).id());
 
         verify(connection).commit();
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(mailSender, resend);
     }
 
     @Test
     void memberCreationStillSucceedsWhenMailFails() throws Exception {
-        doThrow(new MailSendException("SMTP unavailable")).when(mailSender).send(any(MimeMessagePreparator.class));
+        doThrow(new MailSendException("Resend unavailable")).when(resend)
+                .sendEmail(anyString(), anyString(), anyString(), anyString(), any(byte[].class));
 
         assertEquals(memberId, memberService.createMember(request).id());
 
         verify(connection).commit();
-        verify(mailSender).send(any(MimeMessagePreparator.class));
+        verify(resend).sendEmail(eq(request.email()), anyString(), anyString(), anyString(), any(byte[].class));
+        verifyNoInteractions(mailSender);
     }
 
     @Test
