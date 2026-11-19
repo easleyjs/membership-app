@@ -39,7 +39,8 @@ import java.util.UUID;
 
 @Service
 public class AppUserService {
-    private static final Duration INVITE_LIFETIME = Duration.ofHours(24);
+    // TODO: Restore to 24 hours before production and update the invite email text in MailService.
+    private static final Duration INVITE_LIFETIME = Duration.ofHours(72);
     private static final SecureRandom RANDOM = new SecureRandom();
     private final AppUserRepository appUserRepo;
     private final MemberRepository memberRepo;

@@ -88,7 +88,7 @@ public class MailService {
                     <td align="center" style="padding:0 24px 28px; color:#ffffff;">
                         <p style="margin:0 0 12px;">You've been invited to the Outland admin portal.</p>
                         <a href="%s" style="color:#ff69b4; font-weight:bold;">Set your password</a>
-                        <p style="margin:12px 0 0;">This link expires in 24 hours and can be used once.</p>
+                        <p style="margin:12px 0 0;">This link expires in 72 hours and can be used once.</p>
                     </td>
                 </tr>
                 """.formatted(HtmlUtils.htmlEscape(event.link(), UTF_8.name()));
